@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from './providers';
 import { Header } from './header';
@@ -17,6 +17,7 @@ import {
   IconDatabase,
   IconUpload,
   IconDownload,
+  IconRadar,
 } from './icons';
 import type { Accent, Mode } from './providers';
 import type { Locale } from '@/lib/i18n';
@@ -29,7 +30,7 @@ export type UserRow = {
   created_at: string;
 };
 
-type Tab = 'sites' | 'groups' | 'appearance' | 'system' | 'users' | 'data';
+type Tab = 'sites' | 'groups' | 'scan' | 'appearance' | 'system' | 'users' | 'data';
 
 export function SettingsUI({
   me,
@@ -44,7 +45,7 @@ export function SettingsUI({
   settings: Record<string, string>;
   users: UserRow[];
 }) {
-  const { t } = useApp();
+  const { t, locale } = useApp();
   const router = useRouter();
   const isAdmin = me.role === 'admin';
   const [tab, setTab] = useState<Tab>('sites');
@@ -70,6 +71,7 @@ export function SettingsUI({
   const tabs: { id: Tab; label: string; icon: React.ReactNode; show: boolean }[] = [
     { id: 'sites', label: t('sites'), icon: <IconLink />, show: true },
     { id: 'groups', label: t('groups'), icon: <IconLayers />, show: true },
+    { id: 'scan', label: t('scan'), icon: <IconRadar />, show: isAdmin },
     { id: 'appearance', label: t('appearance'), icon: <IconPalette />, show: true },
     { id: 'system', label: t('system'), icon: <IconGear />, show: isAdmin },
     { id: 'users', label: t('users'), icon: <IconUsers />, show: isAdmin },
@@ -141,6 +143,9 @@ export function SettingsUI({
           )}
           {tab === 'groups' && (
             <GroupsTab groups={groups} setGroups={setGroups} links={links} notify={notify} refresh={refresh} onConfirmDelete={(g) => setConfirmGroup(g)} />
+          )}
+          {tab === 'scan' && isAdmin && (
+            <ScanTab locale={locale} notify={notify} refresh={refresh} />
           )}
           {tab === 'appearance' && (
             <AppearanceTab
@@ -451,6 +456,149 @@ function GroupsTab({
         </div>
       </div>
     </>
+  );
+}
+
+/* ---------------- LAN Scan ---------------- */
+
+type ScanItem = { name: string; url: string; note: string };
+type ScanResult = { scanned: number; created: number; skipped: number; items: ScanItem[] };
+
+function ScanTab({
+  locale,
+  notify,
+  refresh,
+}: {
+  locale: Locale;
+  notify: (m: string) => void;
+  refresh: () => void;
+}) {
+  const { t } = useApp();
+  const [cidr, setCidr] = useState('');
+  const [detected, setDetected] = useState(false);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ScanResult | null>(null);
+
+  useEffect(() => {
+    fetch('/api/scan')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { cidr?: string } | null) => {
+        if (j?.cidr) {
+          setCidr(j.cidr);
+          setDetected(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function start() {
+    if (!agree || busy) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ consent: true, cidr }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        setResult(j);
+        notify(t('scanDone'));
+        refresh();
+      } else {
+        notify(t('scanFailedHint'));
+      }
+    } catch {
+      notify(t('scanFailedHint'));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="panel-card">
+      <div className="panel-title">{t('scan')}</div>
+      <div className="setting-desc" style={{ marginBottom: 12 }}>
+        {t('scanDesc')}
+      </div>
+      {/* ---- 知情同意告知 ---- */}
+      <div
+        className="setting-desc"
+        style={{ border: '1px solid var(--border-strong)', borderRadius: 10, padding: '10px 12px' }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('scanConsentTitle')}</div>
+        <ol style={{ margin: 0, paddingLeft: 18 }}>
+          <li>{t('scanConsent1')}</li>
+          <li>{t('scanConsent2')}</li>
+          <li>{t('scanConsent3')}</li>
+        </ol>
+      </div>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, cursor: 'pointer' }}>
+        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+        <span style={{ fontWeight: 600 }}>{t('scanAgree')}</span>
+      </label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          style={{ width: 180 }}
+          value={cidr}
+          onChange={(e) => setCidr(e.target.value)}
+          placeholder="192.168.1.0/24"
+        />
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{t('scanCidr')}</span>
+        <button className="btn btn-primary btn-sm" disabled={!agree || busy || !cidr} onClick={start}>
+          {busy ? t('scanRunning') : '◈ ' + t('scanStart')}
+        </button>
+      </div>
+      {!detected && (
+        <div className="setting-desc" style={{ marginTop: 8 }}>
+          {t('scanNoNet')}
+        </div>
+      )}
+      {result && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>
+            {t('scanDone')} ·{' '}
+            {t('scanResultSummary')
+              .replace('{n}', String(result.scanned))
+              .replace('{c}', String(result.created))
+              .replace('{s}', String(result.skipped))}
+          </div>
+          <div className="setting-desc" style={{ marginBottom: 8 }}>
+            {result.scanned === 0
+              ? t('scanEmptyResult')
+              : result.created > 0
+                ? t('scanGroupNote')
+                : ''}
+          </div>
+          {result.items.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{t('name')}</th>
+                  <th>{t('url')}</th>
+                  <th>{t('note')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.items.map((x) => (
+                  <tr key={x.url} className="group-row">
+                    <td style={{ fontWeight: 600 }}>{x.name}</td>
+                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>
+                      {x.url}
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {locale === 'zh' ? x.note.split(' ｜ ')[0] : x.note}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
