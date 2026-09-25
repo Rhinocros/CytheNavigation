@@ -22,7 +22,7 @@ export function Header({ right }: { right?: React.ReactNode }) {
       <div className="container header-inner">
         <Link href="/" className="logo">
           <img src="/logo.png" alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
-          <span>Cythe</span>
+          <span>{t('brand')}</span>
         </Link>
         {right && <div className="header-slot">{right}</div>}
         <div className="header-actions">

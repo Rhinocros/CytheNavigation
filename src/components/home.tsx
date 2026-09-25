@@ -1,28 +1,34 @@
 'use client';
 
-import { useState } from 'react';
-import { HomeView } from './home-view';
+import { HomeView, type HomePrefs } from './home-view';
 import type { Group, Link } from '@/lib/types';
 
 export function Home({
   links,
   groups,
   defaultView,
+  favorites,
+  prefs,
+  loggedIn,
 }: {
   links: Link[];
   groups: Group[];
   defaultView: string;
+  favorites: number[];
+  prefs: HomePrefs | null;
+  loggedIn: boolean;
 }) {
-  const [all] = useState(links);
-
   return (
     <>
       <div className="orb orb-1" />
       <div className="orb orb-2" />
       <HomeView
-        initialLinks={all}
+        initialLinks={links}
         initialGroups={groups}
         defaultView={defaultView}
+        favorites={favorites}
+        prefs={prefs}
+        loggedIn={loggedIn}
       />
     </>
   );

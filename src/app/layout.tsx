@@ -2,34 +2,55 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
 import { Providers, type Accent } from '@/components/providers';
+import { SiteFooter } from '@/components/site-footer';
 import type { SessionUser } from '@/lib/auth';
 import { currentUser } from '@/lib/auth';
-import { getSetting } from '@/lib/db';
+import { getSetting, getUserPrefs } from '@/lib/db';
 import type { Locale } from '@/lib/i18n';
 
 export async function generateMetadata(): Promise<Metadata> {
-  let title = 'Cythe 导航';
+  const store = await cookies();
+  const isEn = store.get('cythe_locale')?.value === 'en';
+  let title = isEn ? 'Cythe Navigation' : 'Cythe | 循息导航';
   try {
-    title = getSetting('site_title', title) || title;
+    if (!isEn) title = getSetting('site_title', title) || title;
   } catch {
     /* db not ready during static phase */
   }
-  return { title, description: 'Local services navigation' };
+  return {
+    title,
+    description: isEn ? 'Local-first self-hosted service navigation' : '本地优先的自托管服务导航页',
+  };
 }
 
 export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
-  const locale = (store.get('cythe_locale')?.value === 'en' ? 'en' : 'zh') as Locale;
-  const mode = store.get('cythe_mode')?.value === 'light' ? 'light' : 'dark';
-  const accent = (store.get('cythe_accent')?.value || 'indigo') as Accent;
+  let locale = (store.get('cythe_locale')?.value === 'en' ? 'en' : 'zh') as Locale;
+  let mode: 'light' | 'dark' = store.get('cythe_mode')?.value === 'light' ? 'light' : 'dark';
+  let accent = (store.get('cythe_accent')?.value || 'indigo') as Accent;
   let user: SessionUser | null = null;
   try {
     user = await currentUser();
   } catch {
     user = null;
   }
+  // 账户偏好优先于 cookie：同一账户登录时按账户设置显示
+  let prefs = null;
+  if (user) {
+    try {
+      prefs = getUserPrefs(user.id);
+    } catch {
+      prefs = null;
+    }
+    if (prefs) {
+      if (prefs.theme_mode === 'light' || prefs.theme_mode === 'dark') mode = prefs.theme_mode;
+      if (['indigo', 'graphite', 'forest', 'sand'].includes(prefs.accent)) accent = prefs.accent as Accent;
+      if (prefs.locale === 'zh' || prefs.locale === 'en') locale = prefs.locale as Locale;
+    }
+  }
+  const bg = getSetting('bg_image');
   return (
     <html
       lang={locale === 'zh' ? 'zh-CN' : 'en'}
@@ -38,7 +59,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
     >
       <body>
-        <Providers initial={{ locale, mode, accent, user }}>{children}</Providers>
+        {bg ? <div className="bg-photo" style={{ backgroundImage: `url(/api/asset/bg?v=${encodeURIComponent(bg)})` }} /> : null}
+        <Providers initial={{ locale, mode, accent, user, prefs }}>
+          {children}
+          <SiteFooter />
+        </Providers>
       </body>
     </html>
   );

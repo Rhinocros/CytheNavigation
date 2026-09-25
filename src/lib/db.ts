@@ -46,11 +46,26 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS favorites (
+  user_id INTEGER NOT NULL,
+  link_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, link_id)
+);
+CREATE TABLE IF NOT EXISTS user_prefs (
+  user_id INTEGER PRIMARY KEY,
+  theme_mode TEXT NOT NULL DEFAULT '',
+  accent TEXT NOT NULL DEFAULT '',
+  locale TEXT NOT NULL DEFAULT '',
+  view TEXT NOT NULL DEFAULT '',
+  sort_dir TEXT NOT NULL DEFAULT 'asc',
+  collapsed TEXT NOT NULL DEFAULT '[]'
+);
 INSERT OR IGNORE INTO settings (key, value) VALUES
   ('allow_register','1'),
   ('user_can_add','1'),
   ('default_view','grid'),
-  ('site_title','Cythe 导航');
+  ('site_title','Cythe | 循息导航');
 `;
 
 export function getDb(): Database.Database {
@@ -81,4 +96,43 @@ export function allSettings(): Record<string, string> {
     value: string;
   }[];
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+/* ---------- user prefs (per-account) ---------- */
+export type UserPrefs = {
+  theme_mode: string;
+  accent: string;
+  locale: string;
+  view: string;
+  sort_dir: string;
+  collapsed: string;
+};
+
+export function getUserPrefs(userId: number): UserPrefs | null {
+  const row = getDb()
+    .prepare(
+      'SELECT theme_mode,accent,locale,view,sort_dir,collapsed FROM user_prefs WHERE user_id=?'
+    )
+    .get(userId) as UserPrefs | undefined;
+  return row ?? null;
+}
+
+const PREF_COLS = new Set(['theme_mode', 'accent', 'locale', 'view', 'sort_dir', 'collapsed']);
+
+export function setUserPrefs(userId: number, partial: Record<string, string>) {
+  const db = getDb();
+  db.prepare(
+    'INSERT INTO user_prefs(user_id) VALUES(?) ON CONFLICT(user_id) DO NOTHING'
+  ).run(userId);
+  for (const [k, v] of Object.entries(partial)) {
+    if (!PREF_COLS.has(k)) continue;
+    db.prepare(`UPDATE user_prefs SET ${k}=? WHERE user_id=?`).run(String(v), userId);
+  }
+}
+
+export function getUserFavorites(userId: number): number[] {
+  const rows = getDb()
+    .prepare('SELECT link_id FROM favorites WHERE user_id=?')
+    .all(userId) as { link_id: number }[];
+  return rows.map((r) => r.link_id);
 }

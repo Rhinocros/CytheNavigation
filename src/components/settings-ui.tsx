@@ -8,6 +8,16 @@ import { LinkEditor } from './link-editor';
 import { ConfirmDialog, InputDialog } from './dialog';
 import type { Group, Link } from '@/lib/types';
 import { hostOf, iconSrc } from './home-view';
+import {
+  IconLink,
+  IconLayers,
+  IconPalette,
+  IconGear,
+  IconUsers,
+  IconDatabase,
+  IconUpload,
+  IconDownload,
+} from './icons';
 import type { Accent, Mode } from './providers';
 import type { Locale } from '@/lib/i18n';
 
@@ -57,13 +67,13 @@ export function SettingsUI({
     router.refresh();
   }
 
-  const tabs: { id: Tab; label: string; icon: string; show: boolean }[] = [
-    { id: 'sites', label: t('sites'), icon: '⛓', show: true },
-    { id: 'groups', label: t('groups'), icon: '▤', show: true },
-    { id: 'appearance', label: t('appearance'), icon: '◐', show: true },
-    { id: 'system', label: t('system'), icon: '⚙', show: isAdmin },
-    { id: 'users', label: t('users'), icon: '♟', show: isAdmin },
-    { id: 'data', label: t('data'), icon: '⛁', show: isAdmin },
+  const tabs: { id: Tab; label: string; icon: React.ReactNode; show: boolean }[] = [
+    { id: 'sites', label: t('sites'), icon: <IconLink />, show: true },
+    { id: 'groups', label: t('groups'), icon: <IconLayers />, show: true },
+    { id: 'appearance', label: t('appearance'), icon: <IconPalette />, show: true },
+    { id: 'system', label: t('system'), icon: <IconGear />, show: isAdmin },
+    { id: 'users', label: t('users'), icon: <IconUsers />, show: isAdmin },
+    { id: 'data', label: t('data'), icon: <IconDatabase />, show: isAdmin },
   ];
 
   async function delLink(id: number) {
@@ -115,7 +125,7 @@ export function SettingsUI({
                 className={tab === x.id ? 'active' : ''}
                 onClick={() => setTab(x.id)}
               >
-                <span>{x.icon}</span> {x.label}
+                <span className="nav-ico">{x.icon}</span> {x.label}
               </button>
             ))}
         </nav>
@@ -389,16 +399,18 @@ function GroupsTab({
                   </select>
                 </td>
                 <td style={{ width: 70 }}>
-                  <button className="mini-btn" disabled={i === 0} onClick={() => {
-                    const prev = groups[i - 1];
-                    save(g, { sort: prev.sort });
-                    save(prev, { sort: g.sort });
-                  }}>↑</button>
-                  <button className="mini-btn" disabled={i === groups.length - 1} style={{ marginLeft: 4 }} onClick={() => {
-                    const next = groups[i + 1];
-                    save(g, { sort: next.sort });
-                    save(next, { sort: g.sort });
-                  }}>↓</button>
+                  <div className="sort-btns">
+                    <button className="mini-btn" disabled={i === 0} onClick={() => {
+                      const prev = groups[i - 1];
+                      save(g, { sort: prev.sort });
+                      save(prev, { sort: g.sort });
+                    }}>↑</button>
+                    <button className="mini-btn" disabled={i === groups.length - 1} onClick={() => {
+                      const next = groups[i + 1];
+                      save(g, { sort: next.sort });
+                      save(next, { sort: g.sort });
+                    }}>↓</button>
+                  </div>
                 </td>
                 <td className="section-count">{links.filter((l) => l.group_id === g.id).length}</td>
                 <td>
@@ -515,6 +527,7 @@ function AppearanceTab({
           </div>
         </div>
       </div>
+      <BgImageCard hasBg={!!(settings.bg_image ?? '')} bgKey={settings.bg_image ?? ''} notify={notify} />
       {isAdmin && (
         <div className="panel-card">
           <div className="panel-title">{t('systemTitle')}</div>
@@ -539,6 +552,70 @@ function AppearanceTab({
         </div>
       )}
     </>
+  );
+}
+
+/* ---------------- Background image (site-wide) ---------------- */
+
+function BgImageCard({ hasBg, bgKey, notify }: { hasBg: boolean; bgKey: string; notify: (m: string) => void }) {
+  const { t } = useApp();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(f: File) {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append('file', f);
+    const r = await fetch('/api/asset/bg', { method: 'POST', body: fd });
+    setBusy(false);
+    if (fileRef.current) fileRef.current.value = '';
+    if (r.ok) {
+      notify(t('saved'));
+      setTimeout(() => window.location.reload(), 500);
+    } else notify(t('opFailed'));
+  }
+
+  async function remove() {
+    const r = await fetch('/api/asset/bg', { method: 'DELETE' });
+    if (r.ok) {
+      notify(t('saved'));
+      setTimeout(() => window.location.reload(), 500);
+    } else notify(t('opFailed'));
+  }
+
+  return (
+    <div className="panel-card">
+      <div className="panel-title">{t('bgImage')}</div>
+      <div className="setting-row">
+        <div>
+          <div className="setting-desc">{t('bgHint')}</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+            <button className="btn btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <IconUpload width={14} height={14} /> {t('bgUpload')}
+            </button>
+            {hasBg && (
+              <button className="btn btn-sm" onClick={remove}>
+                ✕ {t('bgRemove')}
+              </button>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            style={{ display: 'none' }}
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+          />
+        </div>
+        {hasBg && (
+          <img
+            src={`/api/asset/bg?v=${encodeURIComponent(bgKey)}`}
+            alt="bg preview"
+            style={{ width: 120, height: 74, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -728,10 +805,10 @@ function DataTab({ notify }: { notify: (m: string) => void }) {
       <div className="panel-title">{t('data')}</div>
       <div style={{ display: 'flex', gap: 10 }}>
         <a className="btn" href="/api/backup" download>
-          ⭳ {t('exportData')}
+          <IconDownload width={14} height={14} /> {t('exportData')}
         </a>
         <button className="btn" onClick={() => fileRef.current?.click()}>
-          ⭱ {t('importData')}
+          <IconUpload width={14} height={14} /> {t('importData')}
         </button>
         <input
           ref={fileRef}

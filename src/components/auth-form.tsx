@@ -64,7 +64,7 @@ export function AuthForm({ mode, bootstrap = false }: { mode: 'login' | 'registe
             <div>
               <div className="logo" style={{ marginBottom: 18 }}>
                 <img src="/logo.png" alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
-                <span>Cythe</span>
+                <span>{t('brand')}</span>
               </div>
               <h1>{mode === 'login' ? t('welcomeBack') : t('createAccount')}</h1>
               <p>{mode === 'login' ? t('loginSubtitle') : (bootstrap ? t('registerFirstAdmin') : t('registerSubtitle'))}</p>
