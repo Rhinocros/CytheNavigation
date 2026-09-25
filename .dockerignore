@@ -1,0 +1,11 @@
+node_modules
+.next
+data
+vibe_images
+.git
+1panel
+Dockerfile
+docker-compose.yml
+README.md
+*.md
+.dockerignore
