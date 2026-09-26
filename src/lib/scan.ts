@@ -388,3 +388,18 @@ export function serviceUrl(s: ScanService): string {
   if (RAW_SCHEME[s.port]) return `${RAW_SCHEME[s.port]}://${s.ip}:${s.port}`;
   return `http://${s.ip}:${s.port}`;
 }
+
+/* ---------- 扫描分组与去重（供 /api/scan 与 /api/scan/confirm 共享） ---------- */
+
+export const SCAN_GROUP_NAME = '内网扫描 · LAN Scan';
+export const SCAN_GROUP_COLOR = '#38bdf8';
+
+/** 从 url 解析 host:port，用于去重比对 */
+export function hostPortOf(u: string): string {
+  try {
+    const x = new URL(u);
+    return `${x.hostname}:${x.port || (x.protocol === 'https:' ? '443' : '80')}`;
+  } catch {
+    return u;
+  }
+}

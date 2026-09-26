@@ -114,6 +114,22 @@ export function SettingsUI({
     else notify(t('opFailed'));
   }
 
+  // 扫描确认后，将新增分组 / 链接立即合并进本地状态，避免需切页才能看到
+  function applyScanResult(group: Group, newLinks: Link[]) {
+    setGroups((gs) =>
+      gs.some((g) => g.id === group.id)
+        ? gs.map((g) => (g.id === group.id ? group : g))
+        : [...gs, group]
+    );
+    if (newLinks.length) {
+      setLinks((ls) => {
+        const ids = new Set(newLinks.map((l) => l.id));
+        return [...ls, ...newLinks.filter((l) => !ids.has(l.id))];
+      });
+    }
+    refresh();
+  }
+
   return (
     <>
       <Header />
@@ -145,7 +161,7 @@ export function SettingsUI({
             <GroupsTab groups={groups} setGroups={setGroups} links={links} notify={notify} refresh={refresh} onConfirmDelete={(g) => setConfirmGroup(g)} />
           )}
           {tab === 'scan' && isAdmin && (
-            <ScanTab locale={locale} notify={notify} refresh={refresh} />
+            <ScanTab locale={locale} notify={notify} onAdded={applyScanResult} />
           )}
           {tab === 'appearance' && (
             <AppearanceTab
@@ -461,24 +477,64 @@ function GroupsTab({
 
 /* ---------------- LAN Scan ---------------- */
 
-type ScanItem = { name: string; url: string; note: string };
-type ScanResult = { scanned: number; created: number; skipped: number; items: ScanItem[] };
+type ScanPreview = { key: string; name: string; url: string; note: string; exists?: boolean; added?: boolean };
+type ScanCache = { ts: number; cidr: string; items: ScanPreview[] };
+const SCAN_CACHE_KEY = 'cythe_scan_cache';
+const SCAN_CACHE_TTL = 5 * 60 * 1000; // 5 分钟
+
+function loadScanCache(): ScanCache | null {
+  try {
+    const raw = localStorage.getItem(SCAN_CACHE_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as ScanCache;
+    if (!c || typeof c.ts !== 'number' || !Array.isArray(c.items)) return null;
+    if (Date.now() - c.ts > SCAN_CACHE_TTL) {
+      localStorage.removeItem(SCAN_CACHE_KEY);
+      return null;
+    }
+    return c;
+  } catch {
+    return null;
+  }
+}
+function saveScanCache(c: ScanCache) {
+  try {
+    localStorage.setItem(SCAN_CACHE_KEY, JSON.stringify(c));
+  } catch {
+    /* ignore quota */
+  }
+}
+function clearScanCache() {
+  try {
+    localStorage.removeItem(SCAN_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function ScanTab({
   locale,
   notify,
-  refresh,
+  onAdded,
 }: {
   locale: Locale;
   notify: (m: string) => void;
-  refresh: () => void;
+  onAdded: (group: Group, links: Link[]) => void;
 }) {
   const { t } = useApp();
   const [cidr, setCidr] = useState('');
   const [detected, setDetected] = useState(false);
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [items, setItems] = useState<ScanPreview[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [fromCache, setFromCache] = useState(false);
+
+  // 默认勾选：未存在且未添加的条目
+  function defaultSelected(list: ScanPreview[]) {
+    return new Set(list.filter((i) => !i.exists && !i.added).map((i) => i.key));
+  }
 
   useEffect(() => {
     fetch('/api/scan')
@@ -490,12 +546,22 @@ function ScanTab({
         }
       })
       .catch(() => {});
+    // 恢复上次扫描结果（5 分钟内）
+    const c = loadScanCache();
+    if (c && c.items.length) {
+      setItems(c.items);
+      setSelected(defaultSelected(c.items));
+      setFromCache(true);
+      if (c.cidr) setCidr(c.cidr);
+    }
   }, []);
 
   async function start() {
     if (!agree || busy) return;
     setBusy(true);
-    setResult(null);
+    setFromCache(false);
+    setItems([]);
+    setSelected(new Set());
     try {
       const r = await fetch('/api/scan', {
         method: 'POST',
@@ -504,9 +570,11 @@ function ScanTab({
       });
       if (r.ok) {
         const j = await r.json();
-        setResult(j);
+        const list: ScanPreview[] = Array.isArray(j.items) ? j.items : [];
+        setItems(list);
+        setSelected(defaultSelected(list));
+        saveScanCache({ ts: Date.now(), cidr, items: list });
         notify(t('scanDone'));
-        refresh();
       } else {
         notify(t('scanFailedHint'));
       }
@@ -515,6 +583,72 @@ function ScanTab({
     }
     setBusy(false);
   }
+
+  const selectableKeys = items.filter((i) => !i.exists && !i.added).map((i) => i.key);
+  const allChecked = selectableKeys.length > 0 && selectableKeys.every((k) => selected.has(k));
+
+  function toggle(key: string) {
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  }
+  function toggleAll() {
+    setSelected((s) => {
+      if (selectableKeys.every((k) => s.has(k))) {
+        const n = new Set(s);
+        selectableKeys.forEach((k) => n.delete(k));
+        return n;
+      }
+      return new Set([...s, ...selectableKeys]);
+    });
+  }
+
+  async function confirm() {
+    const chosen = items.filter((i) => selected.has(i.key) && !i.added && !i.exists);
+    if (chosen.length === 0) {
+      notify(t('scanNoSelection'));
+      return;
+    }
+    setConfirming(true);
+    try {
+      const r = await fetch('/api/scan/confirm', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          items: chosen.map((c) => ({ name: c.name, url: c.url, note: c.note })),
+        }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const chosenKeys = new Set(chosen.map((c) => c.key));
+        const nextItems = items.map((i) =>
+          chosenKeys.has(i.key) ? { ...i, added: true } : i
+        );
+        setItems(nextItems);
+        setSelected(new Set());
+        // 更新缓存（保留剩余预览 5 分钟）
+        saveScanCache({ ts: Date.now(), cidr, items: nextItems });
+        if (j.group && Array.isArray(j.links)) onAdded(j.group as Group, j.links as Link[]);
+        notify(t('scanAddedDone').replace('{c}', String(j.created ?? 0)));
+      } else {
+        notify(t('scanFailedHint'));
+      }
+    } catch {
+      notify(t('scanFailedHint'));
+    }
+    setConfirming(false);
+  }
+
+  function discard() {
+    clearScanCache();
+    setItems([]);
+    setSelected(new Set());
+    setFromCache(false);
+  }
+
+  const selCount = items.filter((i) => selected.has(i.key) && !i.added && !i.exists).length;
 
   return (
     <div className="panel-card">
@@ -548,42 +682,66 @@ function ScanTab({
         />
         <span style={{ fontSize: 11, color: 'var(--muted)' }}>{t('scanCidr')}</span>
         <button className="btn btn-primary btn-sm" disabled={!agree || busy || !cidr} onClick={start}>
-          {busy ? t('scanRunning') : '◈ ' + t('scanStart')}
+          {busy ? t('scanRunning') : '◈ ' + t(items.length ? 'scanRescan' : 'scanStart')}
         </button>
+        {items.length > 0 && (
+          <button className="btn btn-sm" onClick={discard}>
+            ✕ {t('scanClear')}
+          </button>
+        )}
       </div>
       {!detected && (
         <div className="setting-desc" style={{ marginTop: 8 }}>
           {t('scanNoNet')}
         </div>
       )}
-      {result && (
+
+      {items.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            {t('scanDone')} ·{' '}
-            {t('scanResultSummary')
-              .replace('{n}', String(result.scanned))
-              .replace('{c}', String(result.created))
-              .replace('{s}', String(result.skipped))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+            <div style={{ fontWeight: 600 }}>
+              {t('scanFound')}
+              {t('scanCountSummary')
+                .replace('{n}', String(items.length))
+                .replace('{s}', String(selCount))}
+              {fromCache && (
+                <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>
+                  {' '}· {t('scanCachedHint')}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="setting-desc" style={{ marginBottom: 8 }}>
-            {result.scanned === 0
-              ? t('scanEmptyResult')
-              : result.created > 0
-                ? t('scanGroupNote')
-                : ''}
-          </div>
-          {result.items.length > 0 && (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t('name')}</th>
-                  <th>{t('url')}</th>
-                  <th>{t('note')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.items.map((x) => (
-                  <tr key={x.url} className="group-row">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: 34 }}>
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={toggleAll}
+                    disabled={selectableKeys.length === 0}
+                    title={t('scanSelectAll')}
+                  />
+                </th>
+                <th>{t('name')}</th>
+                <th>{t('url')}</th>
+                <th>{t('note')}</th>
+                <th style={{ width: 64 }}>{t('scanStatus')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((x) => {
+                const locked = !!x.added || !!x.exists;
+                return (
+                  <tr key={x.key} className="group-row">
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={locked ? false : selected.has(x.key)}
+                        disabled={locked}
+                        onChange={() => toggle(x.key)}
+                      />
+                    </td>
                     <td style={{ fontWeight: 600 }}>{x.name}</td>
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)' }}>
                       {x.url}
@@ -591,11 +749,32 @@ function ScanTab({
                     <td style={{ fontSize: 11, color: 'var(--muted)' }}>
                       {locale === 'zh' ? x.note.split(' ｜ ')[0] : x.note}
                     </td>
+                    <td>
+                      {x.added ? (
+                        <span className="chip chip-accent">{t('scanAdded')}</span>
+                      ) : x.exists ? (
+                        <span className="chip">{t('scanExists')}</span>
+                      ) : (
+                        <span style={{ color: 'var(--muted)' }}>—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12 }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={confirming || selCount === 0}
+              onClick={confirm}
+            >
+              {confirming ? '⏳' : '✓ ' + t('scanConfirmAdd')}
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {t('scanSelectedHint').replace('{s}', String(selCount))}
+            </span>
+          </div>
         </div>
       )}
     </div>

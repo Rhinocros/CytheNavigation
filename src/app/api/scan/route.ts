@@ -8,14 +8,13 @@ import {
   scanLan,
   detectLocalNets,
   serviceUrl,
+  hostPortOf,
+  SCAN_GROUP_NAME,
   type ScanService,
 } from '@/lib/scan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const SCAN_GROUP_NAME = '内网扫描 · LAN Scan';
-const SCAN_GROUP_COLOR = '#38bdf8';
 
 /** GET：返回本机检测到的私网网段与默认端口表，供前端展示扫描范围 */
 export async function GET() {
@@ -26,9 +25,9 @@ export async function GET() {
 }
 
 /**
- * POST：经用户明确同意（consent: true）后扫描内网，
- * 将开放端口的地址自动写入单独的「内网扫描」分组，
- * 名称与备注根据检测到的服务/系统信息自动生成，后期可在站点管理中手动修改。
+ * POST：经用户明确同意（consent: true）后扫描内网，仅返回预览结果，不写库。
+ * 每条结果带 key(ip:port) 与 exists（是否已在扫描分组中），
+ * 由前端勾选后调用 /api/scan/confirm 才真正添加。
  */
 export async function POST(req: NextRequest) {
   const user = await requireAdmin();
@@ -52,64 +51,30 @@ export async function POST(req: NextRequest) {
     return fail(e instanceof Error ? e.message : 'scan failed', 422);
   }
 
+  // 只读：查现有扫描分组，标记哪些已存在（前端默认不勾选这些）
   const db = getDb();
-  // 单独的扫描分组（不存在则创建）
-  let group = db
-    .prepare('SELECT * FROM groups WHERE name=? LIMIT 1')
+  const group = db
+    .prepare('SELECT id FROM groups WHERE name=? LIMIT 1')
     .get(SCAN_GROUP_NAME) as { id: number } | undefined;
-  if (!group) {
-    const max = (db.prepare('SELECT MAX(sort) m FROM groups').get() as { m: number }).m ?? 0;
-    const info2 = db
-      .prepare('INSERT INTO groups(name,color,sort,visibility,owner_id) VALUES(?,?,?,?,?)')
-      .run(SCAN_GROUP_NAME, SCAN_GROUP_COLOR, max + 1, 'public', null);
-    group = { id: Number(info2.lastInsertRowid) };
-  }
+  const existingKeys = new Set(
+    group
+      ? (db
+          .prepare('SELECT url FROM links WHERE group_id=?')
+          .all(group.id) as { url: string }[]).map((l) => hostPortOf(l.url))
+      : []
+  );
 
-  // 以 host:port 去重，重复扫描不会产生冗余链接
-  const existing = db
-    .prepare('SELECT id,url FROM links WHERE group_id=?')
-    .all(group.id) as { id: number; url: string }[];
-  const hostPortOf = (u: string) => {
-    try {
-      const x = new URL(u);
-      return `${x.hostname}:${x.port || (x.protocol === 'https:' ? '443' : '80')}`;
-    } catch {
-      return u;
-    }
-  };
-  const seen = new Set(existing.map((l) => hostPortOf(l.url)));
-
-  const locale = 'zh';
-  let sort = (db.prepare('SELECT MAX(sort) m FROM links').get() as { m: number }).m ?? 0;
-  let created = 0;
-  let skipped = 0;
-  const items: { name: string; url: string; note: string }[] = [];
-  for (const s of services) {
+  const items = services.map((s) => {
     const url = serviceUrl(s);
     const key = `${s.ip}:${s.port}`;
-    if (seen.has(key)) {
-      skipped++;
-      continue;
-    }
-    seen.add(key);
-    const name = deriveName(s, locale).slice(0, 120);
-    const note = deriveNote(s).slice(0, 500);
-    sort += 1;
-    db.prepare(
-      `INSERT INTO links(group_id,name,url,note,icon,has_thumb,scope,sort,owner_id)
-       VALUES(?,?,?,?,?,?,?,?,?)`
-    ).run(group.id, name, url, note, '', 0, 'internal', sort, user.id);
-    items.push({ name, url, note });
-    created++;
-  }
-
-  return NextResponse.json({
-    cidr,
-    scanned: services.length,
-    created,
-    skipped,
-    groupId: group.id,
-    groupName: SCAN_GROUP_NAME,
-    items: items.slice(0, 60),
+    return {
+      key,
+      name: deriveName(s, 'zh').slice(0, 120),
+      url: url.slice(0, 500),
+      note: deriveNote(s).slice(0, 500),
+      exists: existingKeys.has(hostPortOf(url)),
+    };
   });
+
+  return NextResponse.json({ cidr, scanned: services.length, items });
 }
