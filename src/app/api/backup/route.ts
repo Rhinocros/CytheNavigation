@@ -4,14 +4,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireUser } from '@/lib/api';
-import { fail } from '@/lib/api';
+import { requireAdmin, fail } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** 导出含全量站点与设置（含他人私有分组），仅限管理员 */
 export async function GET() {
-  const u = await requireUser();
+  const u = await requireAdmin();
   if (u instanceof NextResponse) return u;
   const db = getDb();
   return NextResponse.json({
@@ -27,12 +27,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await requireUser();
+  const admin = await requireAdmin();
   if (admin instanceof NextResponse) return admin;
-  if (admin.role !== 'admin') return fail('forbidden', 403);
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.links) || !Array.isArray(body.groups))
     return fail('invalid backup file');
+  if (body.groups.length > 5000 || body.links.length > 20000)
+    return fail('backup too large', 413);
+  // 条目结构预检：非法条目直接拒绝，避免恢复半途失败或注入任意字段
+  if (body.groups.some((g: unknown) => !g || typeof g !== 'object' || typeof (g as { name?: unknown }).name !== 'string'))
+    return fail('invalid groups');
+  if (body.links.some((l: unknown) => !l || typeof l !== 'object' || typeof (l as { name?: unknown }).name !== 'string' || typeof (l as { url?: unknown }).url !== 'string'))
+    return fail('invalid links');
   const db = getDb();
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM links').run();

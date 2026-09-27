@@ -15,14 +15,32 @@ export default async function SettingsPage() {
   if (!user) redirect('/login');
   const db = getDb();
   const isAdmin = user.role === 'admin';
-  const links = db.prepare('SELECT * FROM links ORDER BY sort,id').all() as Link[];
-  const groups = db.prepare('SELECT * FROM groups ORDER BY sort,id').all() as Group[];
+  // 站点管理仅限自己创建的条目：不把全站数据（含他人/内网条目）下发到普通用户浏览器
+  const links = isAdmin
+    ? (db.prepare('SELECT * FROM links ORDER BY sort,id').all() as Link[])
+    : (db
+        .prepare('SELECT * FROM links WHERE owner_id=? ORDER BY sort,id')
+        .all(user.id) as Link[]);
+  // 分组管理：管理员全量；普通用户仅限自己拥有的分组
+  const groups = isAdmin
+    ? (db.prepare('SELECT * FROM groups ORDER BY sort,id').all() as Group[])
+    : (db
+        .prepare("SELECT * FROM groups WHERE owner_id=? AND visibility='private' ORDER BY sort,id")
+        .all(user.id) as Group[]);
   const users = isAdmin
     ? (db
         .prepare('SELECT id,username,role,disabled,created_at FROM users ORDER BY id')
         .all() as UserRow[])
     : [];
+  // 系统设置（开关/标题/图片）仅管理员可见可改
+  const settings = isAdmin ? allSettings() : {};
   return (
-    <SettingsUI me={user} links={links} groups={groups} settings={allSettings()} users={users} />
+    <SettingsUI
+      me={user}
+      links={links}
+      groups={groups}
+      settings={settings}
+      users={users}
+    />
   );
 }

@@ -14,6 +14,7 @@ async function editable(id: number): Promise<boolean> {
   const user = await currentUser();
   if (!user) return false;
   if (user.role === 'admin') return true;
+  // 仅限本人拥有的分组（预置/无主分组归管理员管辖）
   const g = getDb().prepare('SELECT owner_id FROM groups WHERE id=?').get(id) as
     | { owner_id: number | null }
     | undefined;
@@ -22,26 +23,30 @@ async function editable(id: number): Promise<boolean> {
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await editable(Number(id)))) return fail('forbidden', 403);
+  const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) return fail('bad id');
+  if (!(await editable(num))) return fail('forbidden', 403);
   const body = await req.json().catch(() => null);
   if (!body?.name) return fail('name required');
   getDb()
     .prepare('UPDATE groups SET name=?,color=?,sort=?,visibility=? WHERE id=?')
     .run(
       String(body.name).slice(0, 80),
-      String(body.color ?? ''),
+      String(body.color ?? '').slice(0, 40),
       Number(body.sort ?? 0),
       body.visibility === 'private' ? 'private' : 'public',
-      Number(id)
+      num
     );
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await editable(Number(id)))) return fail('forbidden', 403);
+  const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) return fail('bad id');
+  if (!(await editable(num))) return fail('forbidden', 403);
   const db = getDb();
-  db.prepare('DELETE FROM groups WHERE id=?').run(Number(id));
-  db.prepare('UPDATE links SET group_id=0 WHERE group_id=?').run(Number(id));
+  db.prepare('DELETE FROM groups WHERE id=?').run(num);
+  db.prepare('UPDATE links SET group_id=0 WHERE group_id=?').run(num);
   return NextResponse.json({ ok: true });
 }

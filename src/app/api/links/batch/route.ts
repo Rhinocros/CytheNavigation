@@ -52,6 +52,11 @@ export async function POST(req: NextRequest) {
     if (groupId !== 0 && !db.prepare('SELECT id FROM groups WHERE id=?').get(groupId)) {
       return fail('group not found', 422);
     }
+    // 未分组（group_id=0）现仅对管理员公开可见；普通用户不得把链接移到未分组，
+    // 防止借“移出分组”改变条目可见性归属
+    if (groupId === 0 && user.role !== 'admin') {
+      return fail('cannot move to ungrouped', 403);
+    }
   }
 
   db.transaction(() => {

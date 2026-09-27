@@ -5,12 +5,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import { getDb } from '@/lib/db';
+import { currentUser } from '@/lib/auth';
+import { requireAdmin, fail } from '@/lib/api';
+import { rateHit } from '@/lib/rate';
 import { captureThumb, thumbFile } from '@/lib/thumb';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const inflight = new Map<number, Promise<boolean>>();
+// 生成触发限速：首屏图片是并发子请求，窗口内允许一定批量，防止被循环刷 id 驱动无头浏览器
+const GEN_LIMIT = 30;
+const GEN_WINDOW_MS = 60_000;
 
 async function generate(id: number, force: boolean): Promise<boolean> {
   const file = thumbFile(id);
@@ -30,10 +36,11 @@ async function generate(id: number, force: boolean): Promise<boolean> {
   return ok;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const num = Number(id);
-  if (!num) return NextResponse.json({ error: 'bad id' }, { status: 400 });
+  if (!Number.isInteger(num) || num <= 0)
+    return NextResponse.json({ error: 'bad id' }, { status: 400 });
   const file = thumbFile(num);
   if (!fs.existsSync(file)) {
     const db = getDb();
@@ -42,17 +49,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .get(num) as { name: string; url: string } | undefined;
     // 站点不存在时直接 404，避免为已删除的条目生成占位图
     if (!row) return new NextResponse(null, { status: 404 });
+    // 缓存未命中时，生成会驱动服务端浏览器：仅登录用户可触发，并按 id 限速
+    const user = await currentUser();
+    if (!user) return placeholderFor(row.name, row.url);
+    if (!rateHit(`thumb:${user.id}:${num}`, GEN_LIMIT, GEN_WINDOW_MS))
+      return fail('too_many_requests', 429);
     let ok = false;
     try {
       ok = await generate(num, false);
     } catch {
       ok = false;
     }
-    if (!ok || !fs.existsSync(file)) {
-      return new NextResponse(placeholderSvg(row.name, row.url), {
-        headers: { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-store' },
-      });
-    }
+    if (!ok || !fs.existsSync(file)) return placeholderFor(row.name, row.url);
   }
   return new NextResponse(new Uint8Array(fs.readFileSync(file)), {
     headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=3600' },
@@ -60,11 +68,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // 强制重新生成：仅管理员，且按账号限速
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) return fail('bad id');
+  if (!rateHit(`thumb-post:${admin.id}:${num}`, 10, GEN_WINDOW_MS))
+    return fail('too_many_requests', 429);
   fs.rmSync(thumbFile(num), { force: true });
   const ok = await generate(num, true);
   return NextResponse.json({ ok });
+}
+
+function placeholderFor(name: string, url: string) {
+  return new NextResponse(placeholderSvg(name, url), {
+    headers: { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-store' },
+  });
 }
 
 /** 属性值转义，站点名与地址里的特殊字符不能破坏 SVG 结构 */

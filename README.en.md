@@ -170,6 +170,8 @@ Environment variables (editable in `docker-compose.yml`):
 | --- | --- | --- |
 | `CYTHE_HTTP_PORT` | 3000 | Host port |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | (empty) | Initial admin; if empty, the first registered user becomes admin |
+| `DISABLE_FIRST_ADMIN` | (empty) | Set to `1` to disable "first registered user becomes admin" (use with `ADMIN_*`; recommended for public deployments) |
+| `COOKIE_SECURE` | (empty) | Set to `1` to mark the session cookie `Secure`; enable when served behind HTTPS-terminating proxies |
 | `TZ` | Asia/Shanghai | Timezone |
 
 State persists under `./data` (`cythe.db`, `icons/`, `thumbs/`).

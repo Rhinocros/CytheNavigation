@@ -7,14 +7,17 @@ import { getDb } from '@/lib/db';
 import { currentUser } from '@/lib/auth';
 import { fail } from '@/lib/api';
 import fs from 'node:fs';
-import path from 'node:path';
-import { THUMB_DIR } from '@/lib/db';
+import { thumbFile } from '@/lib/thumb';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Row = { id: number; owner_id: number | null };
 
+/**
+ * 可编辑判定：管理员全量；普通用户仅限自己创建的条目。
+ * 否则任何人可通过编辑把他人（甚至管理员）的条目劫持为己有。
+ */
 async function editable(id: number): Promise<boolean> {
   const user = await currentUser();
   if (!user) return false;
@@ -25,7 +28,9 @@ async function editable(id: number): Promise<boolean> {
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await editable(Number(id)))) return fail('forbidden', 403);
+  const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) return fail('bad id');
+  if (!(await editable(num))) return fail('forbidden', 403);
   const body = await req.json().catch(() => null);
   if (!body) return fail('bad body');
   const db = getDb();
@@ -36,21 +41,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     String(body.name ?? '').slice(0, 120),
     String(body.url ?? '').slice(0, 500),
     String(body.note ?? '').slice(0, 500),
-    String(body.icon ?? ''),
+    String(body.icon ?? '').slice(0, 500),
     body.has_thumb ? 1 : 0,
     body.scope === 'external' ? 'external' : 'internal',
     Number(body.sort ?? 0),
-    Number(id)
+    num
   );
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await editable(Number(id)))) return fail('forbidden', 403);
-  getDb().prepare('DELETE FROM links WHERE id=?').run(Number(id));
+  const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) return fail('bad id');
+  if (!(await editable(num))) return fail('forbidden', 403);
+  getDb().prepare('DELETE FROM links WHERE id=?').run(num);
   // 一并清除收藏记录，避免留下指向已删除站点的孤儿数据
-  getDb().prepare('DELETE FROM favorites WHERE link_id=?').run(Number(id));
-  fs.rmSync(path.join(THUMB_DIR, `${id}.png`), { force: true });
+  getDb().prepare('DELETE FROM favorites WHERE link_id=?').run(num);
+  fs.rmSync(thumbFile(num), { force: true });
   return NextResponse.json({ ok: true });
 }

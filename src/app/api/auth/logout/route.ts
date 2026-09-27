@@ -4,7 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { destroySession, SESSION_COOKIE } from '@/lib/auth';
+import { destroySession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,7 @@ export async function POST() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) destroySession(token);
-  store.delete(SESSION_COOKIE);
+  // 删除时需携带同名属性（path 等），否则部分浏览器不会清除 cookie
+  store.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
   return NextResponse.json({ ok: true });
 }

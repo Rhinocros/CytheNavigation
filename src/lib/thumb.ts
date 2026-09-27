@@ -6,6 +6,22 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { THUMB_DIR } from './db';
+import { isLanProtectedHost } from './auth';
+
+/**
+ * 截图目标准入：仅 http/https，且禁止回环/链路本地（云元数据）/组播等服务器自身地址；
+ * 导航目标本身位于内网，故 RFC1918 不拦截。无法解析的 URL 一律拒绝。
+ */
+export function thumbTargetAllowed(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  return !isLanProtectedHost(u.hostname);
+}
 
 let browserPromise: Promise<import('playwright-core').Browser | null> | null = null;
 
@@ -65,6 +81,10 @@ export function thumbFile(id: number): string {
 }
 
 export async function captureThumb(url: string, id: number, timeoutMs = 20000): Promise<boolean> {
+  if (!thumbTargetAllowed(url)) {
+    console.warn('[thumb] blocked target:', url.slice(0, 120));
+    return false;
+  }
   const browser = await getBrowser();
   if (!browser) return false;
   let ctx: import('playwright-core').BrowserContext | null = null;

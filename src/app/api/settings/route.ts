@@ -18,8 +18,20 @@ const ALLOWED = new Set([
   'logo_image',
 ]);
 
+/** 公开可读的键白名单：新增设置默认不对外，只有确认无敏感信息的才加入 */
+const PUBLIC_KEYS = new Set([
+  'allow_register',
+  'default_view',
+  'site_title',
+  'logo_image',
+  'bg_image',
+]);
+
 export async function GET() {
-  return NextResponse.json({ settings: allSettings() });
+  const all = allSettings();
+  const settings: Record<string, string> = {};
+  for (const k of PUBLIC_KEYS) if (k in all) settings[k] = all[k];
+  return NextResponse.json({ settings });
 }
 
 export async function PUT(req: NextRequest) {
@@ -30,5 +42,8 @@ export async function PUT(req: NextRequest) {
   for (const [k, v] of Object.entries(body)) {
     if (ALLOWED.has(k)) setSetting(k, String(v));
   }
-  return NextResponse.json({ settings: allSettings(), saved: getSetting('site_title') });
+  const all = allSettings();
+  const saved: Record<string, string> = {};
+  for (const k of PUBLIC_KEYS) if (k in all) saved[k] = all[k];
+  return NextResponse.json({ settings: saved, title: getSetting('site_title') });
 }

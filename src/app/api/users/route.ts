@@ -4,22 +4,22 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { currentUser } from '@/lib/auth';
-import { fail } from '@/lib/api';
+import { requireAdmin, fail } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** 用户名单仅限管理员，防止普通账号枚举全站用户 */
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return fail('unauthorized', 401);
+  const user = await requireAdmin();
+  if (user instanceof NextResponse) return user;
   const rows = getDb().prepare('SELECT id,username,role,disabled,created_at FROM users ORDER BY id').all();
-  return NextResponse.json({ users: rows, isAdmin: user.role === 'admin' });
+  return NextResponse.json({ users: rows, isAdmin: true });
 }
 
 export async function PUT(req: NextRequest) {
-  const user = await currentUser();
-  if (!user || user.role !== 'admin') return fail('forbidden', 403);
+  const user = await requireAdmin();
+  if (user instanceof NextResponse) return user;
   const body = await req.json().catch(() => null);
   const id = Number(body?.id);
   if (!id) return fail('id required');
@@ -43,8 +43,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await currentUser();
-  if (!user || user.role !== 'admin') return fail('forbidden', 403);
+  const user = await requireAdmin();
+  if (user instanceof NextResponse) return user;
   const id = Number(new URL(req.url).searchParams.get('id'));
   if (!id || id === user.id) return fail('invalid id', 400);
   const db = getDb();

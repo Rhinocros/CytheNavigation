@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, getSetting, setSetting } from '@/lib/db';
-import { requireUser, fail } from '@/lib/api';
+import { requireAdmin, fail } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,10 +41,10 @@ export async function GET() {
   });
 }
 
-/** Upload a new background image (multipart form-data, field "file"). */
+/** Upload a new background image (multipart form-data, field "file"). Admin only：背景图是全站设置。 */
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
-  if (user instanceof NextResponse) return user;
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
   if (!(file instanceof File)) return fail('missing_file');
@@ -52,9 +52,10 @@ export async function POST(req: NextRequest) {
   const ext = path.extname(file.name || '').toLowerCase();
   if (!EXT_MIME[ext]) return fail('unsupported_type');
   fs.mkdirSync(BG_DIR, { recursive: true });
-  // remove previous background files
+  // remove previous background files（逐文件删除，不用 recursive 整目录）
   try {
-    for (const f of fs.readdirSync(BG_DIR)) fs.rmSync(path.join(BG_DIR, f), { force: true });
+    for (const f of fs.readdirSync(BG_DIR))
+      fs.rmSync(path.join(BG_DIR, f), { force: true, recursive: false });
   } catch {
     /* dir may not exist yet */
   }
@@ -64,12 +65,13 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, bg: `/api/asset/bg?v=${Date.now()}` });
 }
 
-/** Remove the background image. */
+/** Remove the background image. Admin only. */
 export async function DELETE() {
-  const user = await requireUser();
-  if (user instanceof NextResponse) return user;
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   try {
-    fs.rmSync(BG_DIR, { recursive: true, force: true });
+    for (const f of fs.readdirSync(BG_DIR))
+      fs.rmSync(path.join(BG_DIR, f), { force: true, recursive: false });
   } catch {
     /* ignore */
   }

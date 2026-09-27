@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
   const ext = path.extname(file.name || '').toLowerCase();
   if (!EXT_MIME[ext]) return fail('unsupported_type');
   fs.mkdirSync(LOGO_DIR, { recursive: true });
-  // remove previous logo files
+  // remove previous logo files（逐文件删除，不用 recursive 整目录）
   try {
-    for (const f of fs.readdirSync(LOGO_DIR)) fs.rmSync(path.join(LOGO_DIR, f), { force: true });
+    for (const f of fs.readdirSync(LOGO_DIR))
+      fs.rmSync(path.join(LOGO_DIR, f), { force: true, recursive: false });
   } catch {
     /* dir may not exist yet */
   }
@@ -72,7 +73,8 @@ export async function DELETE() {
   const admin = await requireAdmin();
   if (admin instanceof NextResponse) return admin;
   try {
-    fs.rmSync(LOGO_DIR, { recursive: true, force: true });
+    for (const f of fs.readdirSync(LOGO_DIR))
+      fs.rmSync(path.join(LOGO_DIR, f), { force: true, recursive: false });
   } catch {
     /* ignore */
   }

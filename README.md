@@ -193,6 +193,8 @@ docker compose up -d --build
 | --- | --- | --- |
 | `CYTHE_HTTP_PORT` | 3000 | 对外端口 |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | (空) | 初始管理员；留空则第一个注册用户成为管理员 |
+| `DISABLE_FIRST_ADMIN` | (空) | 设为 `1` 时禁用“第一个注册用户自动成为管理员”（配合 `ADMIN_*` 使用，适合公网部署） |
+| `COOKIE_SECURE` | (空) | 设为 `1` 时会话 cookie 带 `Secure` 标志；反向代理终结 HTTPS 后部署时建议开启 |
 | `TZ` | Asia/Shanghai | 时区 |
 
 数据持久化在 `./data`（含 `cythe.db`、`icons/`、`thumbs/`）。
