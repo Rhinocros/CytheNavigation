@@ -18,7 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
   let title = isEn ? 'Cythe Navigation' : 'Cythe | 循息导航';
   let logo = '';
   try {
-    if (!isEn) title = getSetting('site_title', title) || title;
+    // 自定义站点标题对两种语言都生效；未填写时保留默认品牌名
+    title = getSetting('site_title', title).trim() || title;
     logo = getSetting('logo_image');
   } catch {
     /* db not ready during static phase */
@@ -26,7 +27,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description: isEn ? 'Local-first self-hosted service navigation' : '本地优先的自托管服务导航页',
-    icons: logo ? { icon: `/api/asset/logo?v=${encodeURIComponent(logo)}` } : undefined,
+    // 未上传自定义 Logo 时也要输出标签页图标，否则退化为浏览器默认图标
+    icons: { icon: logo ? `/api/asset/logo?v=${encodeURIComponent(logo)}` : '/logo.png' },
   };
 }
 
@@ -60,6 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const bg = getSetting('bg_image');
   const logoImage = getSetting('logo_image');
   const logoSrc = logoImage ? `/api/asset/logo?v=${encodeURIComponent(logoImage)}` : '/logo.png';
+  const siteTitle = getSetting('site_title', '');
   return (
     <html
       lang={locale === 'zh' ? 'zh-CN' : 'en'}
@@ -67,9 +70,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       data-accent={accent}
       suppressHydrationWarning
     >
-      <body>
+      <body className={bg ? 'has-photo' : undefined}>
         {bg ? <div className="bg-photo" style={{ backgroundImage: `url(/api/asset/bg?v=${encodeURIComponent(bg)})` }} /> : null}
-        <Providers initial={{ locale, mode, accent, user, prefs, logo: logoSrc }}>
+        <Providers initial={{ locale, mode, accent, user, prefs, logo: logoSrc, title: siteTitle }}>
           {children}
           <SiteFooter />
         </Providers>

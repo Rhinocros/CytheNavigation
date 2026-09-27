@@ -23,6 +23,9 @@ type Ctx = {
   /** 站点 Logo 地址（管理员可在系统设置中替换） */
   logo: string;
   setLogo: (src: string) => void;
+  /** 站点标题（系统设置可自定义，未设置时跟随语言的默认品牌名） */
+  title: string;
+  setTitle: (v: string) => void;
 };
 
 const AppCtx = createContext<Ctx>(null!);
@@ -44,6 +47,7 @@ export function Providers({
     user: Ctx['user'];
     prefs?: Record<string, string> | null;
     logo?: string;
+    title?: string;
   };
   children: React.ReactNode
 }) {
@@ -52,6 +56,19 @@ export function Providers({
   const [accent, setAccentS] = useState<Accent>(initial.accent as Accent);
   const [user, setUser] = useState(initial.user);
   const [logo, setLogo] = useState(initial.logo ?? '/logo.png');
+  const [titleOverride, setTitle] = useState((initial.title ?? '').trim());
+  // 自定义标题优先；置空则回退到跟随语言的默认品牌名
+  const title = titleOverride || dict[locale].brand;
+
+  // 服务端重新渲染（router.refresh）后回灌最新标题
+  useEffect(() => {
+    setTitle((initial.title ?? '').trim());
+  }, [initial.title]);
+
+  // 浏览器标签页标题跟随站点标题（服务端 metadata 只在整页渲染时更新）
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   // 登录时把账户偏好同步到库（fire-and-forget），下次同一账户登录自动恢复
   const savePref = useCallback((key: string, value: string) => {
@@ -139,8 +156,10 @@ export function Providers({
       setUser,
       logo,
       setLogo,
+      title,
+      setTitle,
     }),
-    [locale, mode, accent, user, logo, setLocale, setMode, setAccent]
+    [locale, mode, accent, user, logo, title, setLocale, setMode, setAccent]
   );
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

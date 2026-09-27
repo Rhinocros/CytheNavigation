@@ -20,7 +20,7 @@ const errMap: Record<string, TKey> = {
 };
 
 export function AuthForm({ mode, bootstrap = false }: { mode: 'login' | 'register'; bootstrap?: boolean }) {
-  const { t, setUser, logo } = useApp();
+  const { t, setUser, logo, title } = useApp();
   const router = useRouter();
   const [username, setU] = useState('');
   const [password, setP] = useState('');
@@ -68,7 +68,7 @@ export function AuthForm({ mode, bootstrap = false }: { mode: 'login' | 'registe
             <div>
               <div className="logo" style={{ marginBottom: 18 }}>
                 <img src={logo} alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
-                <span>{t('brand')}</span>
+                <span>{title}</span>
               </div>
               <h1>{mode === 'login' ? t('welcomeBack') : t('createAccount')}</h1>
               <p>{mode === 'login' ? t('loginSubtitle') : (bootstrap ? t('registerFirstAdmin') : t('registerSubtitle'))}</p>

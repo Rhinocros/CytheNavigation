@@ -102,13 +102,54 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 .search input { flex: 1; background: transparent; border: 0; outline: 0; font-size: 13px; }
 .search input::placeholder { color: var(--muted); }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* 窄屏下收进图标菜单的动作区（桌面保持展开） */
+.header-desktop { display: flex; align-items: center; gap: 8px; }
+/* 菜单按钮同时带 .icon-btn (display:grid)，单类 .header-menu-btn 会被后面的 .icon-btn 靠源码顺序盖掉；
+   加 .header 命名空间提到 (0,2,0) 才能在桌面端真正隐藏它 */
+.header .header-menu-btn { display: none; }
+.header .header-menu-btn.on { background: var(--panel); border-color: var(--border); color: var(--text); }
+.menu-pop { display: none; }
+.header-menu {
+  position: absolute; top: calc(var(--header-h) - 6px); right: 16px; z-index: 46;
+  display: flex; flex-direction: column; gap: 2px; width: 216px; padding: 8px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--panel); box-shadow: var(--shadow-lg); animation: rise 0.18s var(--ease);
+}
+.header-menu button, .header-menu a {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 38px; padding: 0 10px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text);
+  font-size: 13px; font-weight: 600; text-align: left; transition: background 0.15s;
+}
+.header-menu button:hover, .header-menu a:hover { background: var(--panel-2); }
+.menu-sub { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 88px; }
+
+/* 左侧导航抽屉（首页分组 / 设置页）：把手与遮罩只在窄屏下启用 */
+.home-side-body, .settings-nav-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.side-mask { display: none; }
+/* 抽屉顶部品牌行（Logo + 站点标题）：只在窄屏抽屉下启用 */
+.drawer-brand { display: none; }
+/* 把手必须带 .home-side / .settings-nav 命名空间：.settings-nav button (0,1,1) 会压过单类 .side-toggle (0,1,0)，
+   既会让桌面端导航顶部多出一个多余把手，也会把窄屏把手的背景 / 边框 / 文字色抹成透明无边框 */
+.home-side .side-toggle, .settings-nav .side-toggle {
+  display: none;
+  /* 把手贴在抽屉右边缘外凸；分界线由把手自己的左边框提供，
+     否则抽屉的 border-right 会吃掉 1px（把手是绝对定位，left:100% 只到 padding box 为止） */
+  align-items: center; justify-content: center; width: 34px; height: 44px; padding: 0;
+  border-radius: 0 var(--radius) var(--radius) 0; border: 1px solid var(--border);
+  border-left: 0; background: var(--panel); color: var(--text);
+  font-size: 13px; font-weight: 700; transition: all 0.15s;
+}
+.home-side .side-toggle:hover, .settings-nav .side-toggle:hover {
+  background: var(--panel); color: var(--a1);
+  border-color: color-mix(in srgb, var(--a1) 45%, var(--border));
+}
 
 /* ---------- buttons / chips ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 34px; padding: 0 14px; border-radius: var(--radius);
   border: 1px solid var(--border-strong); background: var(--panel); color: var(--text);
-  font-size: 13px; font-weight: 500; transition: all 0.18s var(--ease);
+  font-size: 13px; font-weight: 500; white-space: nowrap; transition: all 0.18s var(--ease);
 }
 .btn:hover { border-color: var(--a1); color: var(--a1); transform: translateY(-1px); }
 .btn-primary {
@@ -146,7 +187,8 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 .grouptab.active { color: var(--a1); background: color-mix(in srgb, var(--a1) 12%, transparent); border-color: color-mix(in srgb, var(--a1) 28%, transparent); }
 
 /* ---------- home two-column layout (left group sidebar) ---------- */
-.home-layout { display: grid; grid-template-columns: 184px 1fr; gap: 28px; padding-top: 8px; padding-bottom: 56px; align-items: start; }
+/* padding-top 与 .home-side 的 sticky 偏移（header + 16px）保持一致，使导航面板与首个分组标题行顶边齐平 */
+.home-layout { display: grid; grid-template-columns: 184px 1fr; gap: 28px; padding-top: 16px; padding-bottom: 56px; align-items: start; }
 .home-side {
   position: sticky; top: calc(var(--header-h) + 16px);
   display: flex; flex-direction: column; gap: 2px;
@@ -164,13 +206,16 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 .side-dot-all { background: linear-gradient(135deg, var(--a1), var(--a2)); }
 .side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-main { min-width: 0; }
-.home-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 0 4px; flex-wrap: wrap; }
+/* 与分组标题同行显示，靠右对齐 */
+.home-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; flex-wrap: wrap; }
 .fav-section .section-bar { background: linear-gradient(180deg, #f5b301, #f59e0b); }
 .fav-star { display: inline-flex; align-items: center; color: #f5b301; }
 
 /* ---------- sections ---------- */
+/* 分组标题行：折叠按钮 + 色标 + 标题 + 计数，行内右侧放全局工具栏 */
 .section { margin-top: 26px; }
-.section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.home-main > .section:first-child { margin-top: 0; }
+.section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .section-title { font-size: 14px; font-weight: 700; letter-spacing: 0.4px; }
 .section-bar { width: 3px; height: 14px; border-radius: 2px; background: linear-gradient(180deg, var(--a1), var(--a2)); }
 .section-count { font-size: 11px; color: var(--muted); }
@@ -251,6 +296,30 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 /* ---------- background photo (site-wide, uploadable in settings) ---------- */
 .bg-photo { position: fixed; inset: 0; z-index: -2; background-size: cover; background-position: center; background-repeat: no-repeat; }
 
+/* 背景为照片时（body.has-photo）：给原本直接敷在页面底色上的导航与标题补底板，避免文字压在照片上不可读 */
+.has-photo .home-side,
+.has-photo .settings-nav {
+  padding: 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel); /* 与 .panel-card 同一底色 */
+  box-shadow: var(--shadow);
+}
+/* hover 需与同色底板区分，改用 --panel-2 */
+.has-photo .settings-nav button:hover,
+.has-photo .side-tab:hover { background: var(--panel-2); color: var(--text); }
+/* 分组标题行（内含全局工具栏）：底色与导航面板、内容卡片保持同一不透明色 */
+.has-photo .section-head {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--panel);
+}
+.has-photo .empty {
+  padding: 44px 20px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 62%, transparent);
+  backdrop-filter: blur(8px);
+}
+.has-photo .site-footer { backdrop-filter: blur(10px) saturate(1.1); }
+
 /* ---------- favorite / collapse / drag ---------- */
 .fav-btn { border: 0; background: transparent; cursor: pointer; font-size: 15px; line-height: 1; color: var(--muted); padding: 2px 4px; border-radius: 6px; transition: transform 0.15s var(--ease), color 0.15s; }
 .fav-btn:hover { transform: scale(1.25); color: #f5b301; }
@@ -277,6 +346,9 @@ input, select, textarea { font-family: inherit; color: var(--text); }
   font-size: 13px; transition: border-color 0.2s, box-shadow 0.2s; width: 100%;
 }
 .input:focus, .select:focus { border-color: var(--a1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a1) 16%, transparent); }
+/* 文本设置项：输入框与显式保存按钮成组 */
+.save-field { display: inline-flex; align-items: center; gap: 6px; }
+.save-field .btn:disabled { opacity: .45; cursor: default; transform: none; }
 textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
 
 /* ---------- drawer & modal ---------- */
@@ -292,14 +364,22 @@ textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 90;
   width: 400px; max-width: 92vw; padding: 22px; border-radius: var(--radius);
   background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
-  animation: rise 0.25s var(--ease);
+  animation: modal-in 0.25s var(--ease);
+}
+/* 弹窗靠 translate(-50%,-50%) 居中，入场动画必须把这段位移一起写进 keyframes：
+   若复用 rise（其 transform 不含 -50%），动画期间居中会被覆盖，弹窗会从偏右下的位置跳回中间 */
+@keyframes modal-in {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 .drawer-head { padding: 18px 20px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
 .drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
 .drawer-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ---------- settings layout ---------- */
-.settings-layout { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 28px 0 60px; align-items: start; }
+/* 上下内边距必须用 longhand：写成 padding 简写会把同一元素上 .container 的左右 24px 内边距抹掉，
+   导致设置页内容贴屏幕边缘、并与左侧抽屉把手重叠 */
+.settings-layout { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding-top: 28px; padding-bottom: 60px; align-items: start; }
 .settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: calc(var(--header-h) + 20px); }
 .settings-nav button {
   display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px;
@@ -312,7 +392,8 @@ textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
 .nav-ico { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
 .nav-ico svg { width: 16px; height: 16px; display: block; }
 .sort-btns { display: flex; align-items: center; gap: 4px; }
-.settings-panel { display: flex; flex-direction: column; gap: 16px; }
+.settings-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.settings-nav { min-width: 0; }
 /* 扫描进行中的防中断提醒 */
 .scan-warn {
   margin-top: 10px; padding: 9px 12px; border-radius: var(--radius);
@@ -320,16 +401,34 @@ textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
   background: color-mix(in srgb, #f59e0b 12%, transparent);
   color: var(--text); font-size: 12px; font-weight: 600;
 }
-.panel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
+/* overflow-x:auto 同时让窄屏下的宽表格在卡片内横向滚动，而不是撑宽整个页面（非 visible 的 overflow 会把弹性/网格项的自动最小宽归 0） */
+.panel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; overflow-x: auto; }
 .panel-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
 /* ---------- table ---------- */
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+/* 全选列宽度用类而非内联样式，窄屏卡片化后才能重新分配 */
+.table th.th-sel { width: 34px; }
+/* “全选”文字只在窄屏卡片模式下出现（表头其他列会被隐藏） */
+.th-label { display: none; }
 .table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 .table tr.group-row { transition: background 0.15s; }
 .table tr.group-row:hover { background: var(--panel-2); }
+/* 已勾选的行用主题色轻底标识 */
+.table tr.row-sel, .table tr.row-sel:hover { background: color-mix(in srgb, var(--a1) 12%, transparent); }
+.table th input[type='checkbox'], .table td input[type='checkbox'] {
+  width: 15px; height: 15px; margin: 0; accent-color: var(--a1); cursor: pointer;
+}
+.table th input[type='checkbox']:disabled, .table td input[type='checkbox']:disabled { cursor: default; opacity: .4; }
+/* 批量操作栏：勾选后出现在表格下方 */
+.bulk-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2);
+}
+.bulk-count { font-size: 12px; font-weight: 700; color: var(--a1); }
+.bulk-select { width: auto; min-width: 156px; height: 30px; font-size: 12px; }
 .avatar-sq { width: 26px; height: 26px; border-radius: 5px; display: inline-grid; place-items: center; background: linear-gradient(135deg, var(--a1), var(--a2)); color: var(--a-contrast); font-weight: 700; font-size: 12px; }
 
 /* ---------- switch ---------- */
@@ -385,22 +484,128 @@ textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
 .empty { padding: 60px 0; text-align: center; color: var(--muted); font-size: 13px; }
 .divider { height: 1px; background: var(--border); margin: 8px 0; }
 
+/* ---------- 窄屏（≤760px）适配 ---------- */
+/* 基础规则必须写在媒体查询之前：同为单类选择器时，后出现的规则会覆盖媒体查询内的规则 */
+.msearch-btn { display: none; }
+.msearch-bar .search { height: 38px; }
+
 @media (max-width: 760px) {
-  .settings-layout { grid-template-columns: 1fr; }
-  .settings-nav { position: static; flex-direction: row; flex-wrap: wrap; }
+  .settings-layout { grid-template-columns: 1fr; gap: 12px; }
   .home-layout { grid-template-columns: 1fr; gap: 12px; }
-  .home-side { position: static; flex-direction: row; flex-wrap: wrap; max-height: none; overflow: visible; }
-  .home-side-title { display: none; }
-  .side-tab { height: 30px; }
+  /* 左侧导航（首页分组 / 设置页）改为从屏幕左边缘滑出的抽屉，不再占据页面流；
+     占满全部视口高度（top:0 盖过 sticky 顶栏，z-index 62 > header 的 40），
+     顶部留白由品牌行 .drawer-brand 填补（整高正好 = --header-h） */
+  .home-side, .settings-nav {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 62;
+    display: flex; flex-direction: column; gap: 2px;
+    width: 246px; max-width: 78vw; max-height: none; padding: 12px 10px 24px;
+    /* 不能用 overflow 滚动抽屉本体：会把绝对定位到右边缘外的把手裁掉，滚动交给内部列表 */
+    overflow: visible; background: var(--panel); box-shadow: var(--shadow-lg);
+    transform: translateX(-100%); transition: transform 0.28s var(--ease);
+  }
+  .home-side.open, .settings-nav.open { transform: none; }
+  /* 收起时不投影：抽屉本体已在屏幕外，阴影会漏到页面左缘形成一条灰带（浅色主题下尤其明显） */
+  .home-side:not(.open), .settings-nav:not(.open) { box-shadow: none; }
+  .side-mask {
+    display: block; position: fixed; inset: 0; z-index: 60;
+    background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); animation: fade 0.2s;
+  }
+  /* 把手始终露在抽屉右侧：抽屉收起时它贴屏幕左边缘，伸出时跟着抽屉右移
+     （选择器与基础规则保持同样的命名空间写法，靠源码顺序胜出；
+     top 必须让开顶栏，否则抽屉盖住顶栏后把手会叠在 LOGO 上；
+     height 写死是为了两页一致：否则设置页把手被 .settings-nav button 改成 40px，首页仍是基础的 44px） */
+  .settings-nav .side-toggle, .home-side .side-toggle {
+    display: flex; height: 40px; position: absolute; left: 100%; top: calc(var(--header-h) + 12px);
+    border-left: 1px solid var(--border);
+  }
+  .home-side-body, .settings-nav-body { display: flex; flex: 1; min-height: 0; overflow-y: auto; }
+  /* 品牌行抵消容器顶部 padding 与纵向 gap（抽屉是 flex 列，gap:2px）；border-box 下
+     1px 下边框包含在 --header-h 高度内，margin-bottom 取 -3px（= -gap - 边框）才能不重复计算，
+     品牌行下边框正好对齐顶栏底缘，导航项起点与改造前一致 */
+  .drawer-brand {
+    display: flex; align-items: center; gap: 8px; height: var(--header-h); flex: none;
+    margin: -12px -10px calc(-3px); padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden;
+  }
+  .drawer-brand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer-brand-mark { width: 22px; height: 22px; flex: none; border-radius: 6px; object-fit: cover; }
+  /* 收起态用 hidden 属性跳过焦点，但 display:flex 会盖过 hidden 的 UA 样式，需显式兼容 */
+  .drawer-brand[hidden] { display: none; }
+  .home-side-title { display: block; }
+  .side-tab, .settings-nav button { height: 40px; padding: 0 12px; min-width: 0; }
+  .settings-nav button.active { background: color-mix(in srgb, var(--a1) 14%, transparent); }
+  /* 顶栏只留搜索与菜单两个图标按钮，避免英文下文字按钮撑破一行 */
+  .header-inner { gap: 10px; }
+  .header-slot { display: none; }
+  .logo { flex: 1 1 auto; min-width: 0; }
+  .logo > span { overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { margin-left: auto; flex: none; }
+  .header-desktop { display: none; }
+  .header .header-menu-btn, .msearch-btn { display: grid; }
+  .menu-pop { display: block; }
+  .header.msearch .msearch-bar { display: flex; }
+  .msearch-bar { display: none; padding: 0 16px 10px; }
+  .msearch-bar .search { flex: 1; max-width: none; }
   .auth-card { grid-template-columns: 1fr; }
   .auth-brand { display: none; }
   .list-row { grid-template-columns: 34px 1fr auto; }
   .list-note, .list-url { display: none; }
-  .header-slot { display: none; }
-  .msearch-btn { display: grid; }
-  .header.msearch .msearch-bar { display: flex; }
-  .msearch-bar { display: none; padding: 0 16px 10px; }
-  .msearch-bar .search { flex: 1; max-width: none; }
+  /* 小屏时全局工具栏单独占一行，不与分组标题挤在一起 */
+  .section-head .home-toolbar { flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
+  /* 有背景图时抽屉依旧整块不透明底板，但去掉多余的圆角与内边距差异 */
+  .has-photo .home-side, .has-photo .settings-nav {
+    padding: 12px 10px 24px; border: 0; border-radius: 0;
+  }
+  .has-photo .side-toggle { border-color: var(--border); background: var(--panel); }
 }
-.msearch-btn { display: none; }
-.msearch-bar .search { height: 38px; }
+
+/* 站点管理改为卡片式列表：卡片内不横向滚动，信息换行展示。
+   阈值比抽屉更宽——两栏布局下右侧面板只有 500px 上下，七列表格必然横向滚动 */
+@media (max-width: 900px) {
+  .panel-card { padding: 14px; }
+  .sites-table { display: block; width: 100%; }
+  .sites-table thead { display: block; }
+  .sites-table thead tr { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sites-table thead th { display: none; padding: 0; border-bottom: 0; width: auto; }
+  /* 选择器多带一个 th-sel 类，才能压过基础的 .table th.th-sel { width: 34px } */
+  .sites-table thead th.th-sel { display: flex; align-items: center; gap: 6px; width: auto; font-size: 12px; }
+  .sites-table .th-label { display: inline; white-space: nowrap; }
+  .sites-table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .sites-table tbody tr {
+    display: grid; align-items: start; gap: 4px 8px;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    /* 勾选框列纵向跨满三行并兼作图标列；地址、分组行的左缘与上方名称列严格对齐 */
+    grid-template-areas:
+      'box name name act'
+      'box url  url  url'
+      'box grp  grp  scp';
+    padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--panel-2);
+  }
+  .sites-table tbody td { padding: 0; border-bottom: 0; min-width: 0; }
+  .sites-table tbody td:nth-child(1) { grid-area: box; align-self: center; position: relative; }
+  /* 图标脱离文档流挂到勾选框列：第一行行高就是勾选框高度，图标与名称首行同起点，
+     名称列才能从第 2 列起笔、与下方地址左缘对齐 */
+  .sites-table tbody td:nth-child(2) {
+    position: absolute; left: 0; top: 0; grid-area: unset; height: 26px;
+    display: flex; align-items: center;
+  }
+  .sites-table tbody td:nth-child(3) { grid-area: name; }
+  .sites-table tbody td:nth-child(3) div { overflow-wrap: anywhere; }
+  /* 备注最多两行，避免扫描生成的长备注把卡片撑得很高 */
+  .sites-table tbody td:nth-child(3) div + div {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .sites-table tbody td:nth-child(4) {
+    grid-area: url; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sites-table tbody td:nth-child(5) { grid-area: grp; }
+  .sites-table tbody td:nth-child(6) { grid-area: scp; text-align: right; }
+  .sites-table tbody td:nth-child(7) { grid-area: act; }
+  /* 空列表占位行（colSpan）整行居中，不能落到 box 小格里 */
+  .sites-table tbody td[colspan] { grid-area: 1 / 1 / 2 / 4; text-align: center; }
+  .sites-table .chip { max-width: 100%; }
+  .sites-table .row-actions { gap: 6px; }
+  .sites-table .mini-btn { width: 28px; height: 28px; }
+}

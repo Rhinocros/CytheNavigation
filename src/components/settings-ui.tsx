@@ -4,8 +4,9 @@
  */
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
+import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from './providers';
 import { Header } from './header';
@@ -50,10 +51,12 @@ export function SettingsUI({
   settings: Record<string, string>;
   users: UserRow[];
 }) {
-  const { t, locale } = useApp();
+  const { t, locale, logo, title } = useApp();
   const router = useRouter();
   const isAdmin = me.role === 'admin';
   const [tab, setTab] = useState<Tab>('sites');
+  // 小屏下左侧设置导航改为可收缩 / 伸出
+  const [navOpen, setNavOpen] = useState(false);
   const [links, setLinks] = useState(initLinks);
   const [groups, setGroups] = useState(initGroups);
   const [settings, setSettings] = useState(initSettings);
@@ -100,6 +103,42 @@ export function SettingsUI({
       notify(t('saved'));
       refresh();
     } else notify(t('opFailed'));
+  }
+
+  /** 批量删除 / 批量移动到分组；返回是否成功，供子组件决定是否清空勾选 */
+  async function batchLinks(
+    action: 'delete' | 'move',
+    ids: number[],
+    groupId = 0
+  ): Promise<boolean> {
+    const r = await fetch('/api/links/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, ids, group_id: groupId }),
+    });
+    if (!r.ok) {
+      notify(t('opFailed'));
+      return false;
+    }
+    const j = (await r.json().catch(() => ({}))) as { affected?: number; skipped?: number };
+    const n = Number(j.affected ?? ids.length);
+    const skipped = Number(j.skipped ?? 0);
+    const hint = skipped > 0 ? t('selSkipped').replace('{n}', String(skipped)) : '';
+    if (action === 'delete') {
+      const gone = new Set(ids);
+      setLinks((ls) => ls.filter((l) => !gone.has(l.id)));
+      notify(t('selDeleted').replace('{n}', String(n)) + hint);
+    } else {
+      const moved = new Set(ids);
+      setLinks((ls) => ls.map((l) => (moved.has(l.id) ? { ...l, group_id: groupId } : l)));
+      const target =
+        groupId === 0
+          ? t('ungrouped')
+          : groups.find((g) => g.id === groupId)?.name ?? t('ungrouped');
+      notify(t('selMoved').replace('{n}', String(n)).replace('{g}', target) + hint);
+    }
+    refresh();
+    return true;
   }
 
   async function delGroup(g: Group) {
@@ -150,29 +189,55 @@ export function SettingsUI({
     <>
       <Header />
       <main className="container settings-layout">
-        <nav className="settings-nav">
-          {tabs
-            .filter((x) => x.show)
-            .map((x) => (
-              <button
-                key={x.id}
-                className={tab === x.id ? 'active' : ''}
-                disabled={scanning && x.id !== 'scan'}
-                title={scanning && x.id !== 'scan' ? t('scanKeepPage') : undefined}
-                onClick={() => setTab(x.id)}
-              >
-                <span className="nav-ico">{x.icon}</span> {x.label}
-              </button>
-            ))}
+        {navOpen && <div className="side-mask" onClick={() => setNavOpen(false)} />}
+        <nav className={`settings-nav ${navOpen ? 'open' : ''}`}>
+          {/* 抽屉顶部品牌行：只在窄屏抽屉下显示，填补顶部留白 */}
+          <NextLink href="/" className="drawer-brand" hidden={!navOpen} onClick={() => setNavOpen(false)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logo} alt="" className="drawer-brand-mark" />
+            <span>{title}</span>
+          </NextLink>
+          <button
+            className="side-toggle"
+            aria-expanded={navOpen}
+            title={t('settings')}
+            aria-label={t('settings')}
+            onClick={() => setNavOpen((v) => !v)}
+          >
+            <span className="nav-ico">
+              <IconGear />
+            </span>
+          </button>
+          <div className="settings-nav-body">
+            {tabs
+              .filter((x) => x.show)
+              .map((x) => (
+                <button
+                  key={x.id}
+                  className={tab === x.id ? 'active' : ''}
+                  disabled={scanning && x.id !== 'scan'}
+                  title={scanning && x.id !== 'scan' ? t('scanKeepPage') : undefined}
+                  onClick={() => {
+                    setTab(x.id);
+                    setNavOpen(false);
+                  }}
+                >
+                  <span className="nav-ico">{x.icon}</span> {x.label}
+                </button>
+              ))}
+          </div>
         </nav>
         <div className="settings-panel">
           {tab === 'sites' && (
             <SitesTab
               links={links}
               groups={groups}
+              canEdit={(l) => isAdmin || l.owner_id === me.id}
               onAdd={() => setEditing(null)}
               onEdit={(l) => setEditing(l)}
               onDelete={(id) => setConfirmLink(id)}
+              onBatchDelete={(ids) => batchLinks('delete', ids)}
+              onBatchMove={(ids, gid) => batchLinks('move', ids, gid)}
             />
           )}
           {tab === 'groups' && (
@@ -260,18 +325,66 @@ export function SettingsUI({
 function SitesTab({
   links,
   groups,
+  canEdit,
   onAdd,
   onEdit,
   onDelete,
+  onBatchDelete,
+  onBatchMove,
 }: {
   links: Link[];
   groups: Group[];
+  /** 该条目是否可被当前用户批量勾选（管理员或本人创建） */
+  canEdit: (l: Link) => boolean;
   onAdd: () => void;
   onEdit: (l: Link) => void;
   onDelete: (id: number) => void;
+  onBatchDelete: (ids: number[]) => Promise<boolean>;
+  onBatchMove: (ids: number[], groupId: number) => Promise<boolean>;
 }) {
   const { t } = useApp();
   const gname = (id: number) => groups.find((g) => g.id === id)?.name ?? t('ungrouped');
+  const [sel, setSel] = useState<Set<number>>(() => new Set());
+  const [pendingDelete, setPendingDelete] = useState<number[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const headBox = useRef<HTMLInputElement>(null);
+
+  // 按表格顺序取当前选中项，条目被删除后自动失效，无需手动清理
+  const selIds = links.filter((l) => sel.has(l.id)).map((l) => l.id);
+  const editableIds = links.filter(canEdit).map((l) => l.id);
+  const allChecked = editableIds.length > 0 && editableIds.every((id) => sel.has(id));
+
+  // 部分选中时表头复选框显示为半选状态（indeterminate 只能通过 DOM 设置）
+  useEffect(() => {
+    if (headBox.current) headBox.current.indeterminate = selIds.length > 0 && !allChecked;
+  }, [selIds.length, allChecked]);
+
+  function toggle(id: number) {
+    setSel((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+  function toggleAll() {
+    setSel((s) => {
+      if (editableIds.every((id) => s.has(id))) {
+        const n = new Set(s);
+        editableIds.forEach((id) => n.delete(id));
+        return n;
+      }
+      return new Set([...s, ...editableIds]);
+    });
+  }
+
+  async function moveTo(groupId: number) {
+    if (busy || selIds.length === 0) return;
+    setBusy(true);
+    const ok = await onBatchMove(selIds, groupId);
+    setBusy(false);
+    if (ok) setSel(new Set());
+  }
+
   return (
     <div className="panel-card">
       <div className="panel-title">
@@ -280,9 +393,20 @@ function SitesTab({
           ＋ {t('addSite')}
         </button>
       </div>
-      <table className="table">
+      <table className="table sites-table">
         <thead>
           <tr>
+            <th className="th-sel">
+              <input
+                ref={headBox}
+                type="checkbox"
+                checked={allChecked}
+                disabled={editableIds.length === 0}
+                onChange={toggleAll}
+                title={t('selAll')}
+              />
+              <span className="th-label">{t('selAll')}</span>
+            </th>
             <th style={{ width: 36 }} />
             <th>{t('name')}</th>
             <th>{t('url')}</th>
@@ -293,7 +417,15 @@ function SitesTab({
         </thead>
         <tbody>
           {links.map((l) => (
-            <tr key={l.id} className="group-row">
+            <tr key={l.id} className={`group-row ${sel.has(l.id) ? 'row-sel' : ''}`}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={sel.has(l.id)}
+                  disabled={!canEdit(l)}
+                  onChange={() => toggle(l.id)}
+                />
+              </td>
               <td>
                 <span className="favicon" style={{ width: 26, height: 26 }}>
                   <img src={iconSrc(l)} alt="" style={{ width: 17, height: 17 }} loading="lazy" />
@@ -328,13 +460,59 @@ function SitesTab({
           ))}
           {links.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 30 }}>
+              <td colSpan={7} style={{ textAlign: 'center', color: 'var(--muted)', padding: 30 }}>
                 —
               </td>
             </tr>
           )}
         </tbody>
       </table>
+      {/* ---- 批量操作栏：勾选后出现 ---- */}
+      {selIds.length > 0 && (
+        <div className="bulk-bar">
+          <span className="bulk-count">{t('selCount').replace('{n}', String(selIds.length))}</span>
+          <select
+            className="select bulk-select"
+            value=""
+            disabled={busy}
+            onChange={(e) => e.target.value !== '' && moveTo(Number(e.target.value))}
+          >
+            <option value="">{t('selMoveTo')}</option>
+            <option value="0">{t('ungrouped')}</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn-danger btn-sm"
+            disabled={busy}
+            onClick={() => setPendingDelete(selIds)}
+          >
+            ✕ {t('selDelete')}
+          </button>
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setSel(new Set())}>
+            {t('selClear')}
+          </button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={'⚠ ' + t('delete')}
+        message={t('selDeleteConfirm').replace('{n}', String(pendingDelete?.length ?? 0))}
+        onCancel={() => setPendingDelete(null)}
+        onOk={() => {
+          const ids = pendingDelete ?? [];
+          setPendingDelete(null);
+          if (ids.length === 0) return;
+          setBusy(true);
+          void onBatchDelete(ids).then((ok) => {
+            setBusy(false);
+            if (ok) setSel(new Set());
+          });
+        }}
+      />
     </div>
   );
 }
@@ -412,11 +590,10 @@ function GroupsTab({
             {groups.map((g, i) => (
               <tr key={g.id} className="group-row">
                 <td>
-                  <input
-                    className="input"
-                    style={{ height: 30, maxWidth: 180 }}
-                    defaultValue={g.name}
-                    onBlur={(e) => e.target.value !== g.name && save(g, { name: e.target.value })}
+                  <InlineSaveInput
+                    value={g.name}
+                    style={{ height: 30, maxWidth: 150 }}
+                    onSave={(name) => save(g, { name })}
                   />
                 </td>
                 <td>
@@ -982,7 +1159,7 @@ function BgImageCard({ hasBg, bgKey, notify }: { hasBg: boolean; bgKey: string; 
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
             style={{ display: 'none' }}
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
@@ -999,16 +1176,43 @@ function BgImageCard({ hasBg, bgKey, notify }: { hasBg: boolean; bgKey: string; 
   );
 }
 
-function TitleInput({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+/** 文本设置项：输入框 + 显式保存按钮；回车与失焦作为兜底，切换页面或点到其他区域不会丢失改动 */
+function InlineSaveInput({
+  value,
+  onSave,
+  style,
+  placeholder,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  style?: CSSProperties;
+  placeholder?: string;
+}) {
+  const { t } = useApp();
   const [v, setV] = useState(value);
+  // 保存成功后父级值回填，按钮回到禁用态
+  useEffect(() => {
+    setV(value);
+  }, [value]);
+  const dirty = v !== value;
+  const commit = () => {
+    if (dirty) onSave(v);
+  };
   return (
-    <input
-      className="input"
-      style={{ width: 220 }}
-      value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => v !== value && onSave(v)}
-    />
+    <span className="save-field">
+      <input
+        className="input"
+        style={style}
+        value={v}
+        placeholder={placeholder}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+      />
+      <button className="btn btn-primary btn-sm" disabled={!dirty} onClick={commit}>
+        {t('save')}
+      </button>
+    </span>
   );
 }
 
@@ -1076,7 +1280,7 @@ function LogoCard({
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon"
+            accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml,image/x-icon"
             style={{ display: 'none' }}
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
@@ -1102,7 +1306,9 @@ function SystemTab({
   setSettings: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   notify: (m: string) => void;
 }) {
-  const { t } = useApp();
+  const { t, setTitle, setLogo } = useApp();
+  const [confirming, setConfirming] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   async function toggle(key: 'allow_register' | 'user_can_add') {
     const val = settings[key] === '1' ? '0' : '1';
     const r = await fetch('/api/settings', {
@@ -1123,10 +1329,36 @@ function SystemTab({
     });
     if (r.ok) {
       setSettings((s) => ({ ...s, ...patch }));
+      // 站点标题改动需即时反映到页头 / Footer / 浏览器标签页
+      if ('site_title' in patch) setTitle(patch.site_title);
       notify(t('saved'));
     } else notify(t('opFailed'));
   }
+  /** 一键恢复默认：移除自定义背景图与站点 Logo、清空自定义标题（两者为服务端渲染，需整页刷新） */
+  async function restoreAll() {
+    setRestoring(true);
+    await Promise.all([
+      fetch('/api/asset/bg', { method: 'DELETE' }).catch(() => null),
+      fetch('/api/asset/logo', { method: 'DELETE' }).catch(() => null),
+    ]);
+    const r = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ site_title: '' }),
+    });
+    setRestoring(false);
+    if (!r.ok) {
+      notify(t('opFailed'));
+      return;
+    }
+    setSettings((s) => ({ ...s, site_title: '', bg_image: '', logo_image: '' }));
+    setTitle('');
+    setLogo('/logo.png');
+    notify(t('saved'));
+    setTimeout(() => window.location.reload(), 600);
+  }
   return (
+    <>
     <div className="panel-card">
       <div className="panel-title">{t('system')}</div>
       <div className="setting-row">
@@ -1152,11 +1384,35 @@ function SystemTab({
       <div className="setting-row">
         <div>
           <div className="setting-label">{t('siteTitle')}</div>
-          <div className="setting-desc">{t('copyrightNote')}</div>
+          <div className="setting-desc">{t('textSaveHint')}</div>
         </div>
-        <TitleInput value={settings.site_title ?? ''} onSave={(v) => save({ site_title: v })} />
+        <InlineSaveInput
+          value={settings.site_title ?? ''}
+          style={{ width: 200 }}
+          onSave={(v) => save({ site_title: v })}
+        />
+      </div>
+      <div className="setting-row">
+        <div>
+          <div className="setting-label">{t('restoreAll')}</div>
+          <div className="setting-desc">{t('restoreAllDesc')}</div>
+        </div>
+        <button className="btn btn-sm" disabled={restoring} onClick={() => setConfirming(true)}>
+          ↺ {t('restoreAll')}
+        </button>
       </div>
     </div>
+    <ConfirmDialog
+      open={confirming}
+      title={'⚠ ' + t('restoreAll')}
+      message={t('restoreAllConfirm')}
+      onCancel={() => setConfirming(false)}
+      onOk={() => {
+        setConfirming(false);
+        void restoreAll();
+      }}
+    />
+    </>
   );
 }
 

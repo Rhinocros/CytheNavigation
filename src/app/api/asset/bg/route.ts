@@ -17,6 +17,7 @@ const EXT_MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.gif': 'image/gif',
 };
 const MAX_BYTES = 5 * 1024 * 1024;

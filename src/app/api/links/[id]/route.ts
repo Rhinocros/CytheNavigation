@@ -49,6 +49,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   if (!(await editable(Number(id)))) return fail('forbidden', 403);
   getDb().prepare('DELETE FROM links WHERE id=?').run(Number(id));
+  // 一并清除收藏记录，避免留下指向已删除站点的孤儿数据
+  getDb().prepare('DELETE FROM favorites WHERE link_id=?').run(Number(id));
   fs.rmSync(path.join(THUMB_DIR, `${id}.png`), { force: true });
   return NextResponse.json({ ok: true });
 }

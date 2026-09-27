@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from './providers';
 import type { Group, Link } from '@/lib/types';
 import { Header } from './header';
-import { IconStar } from './icons';
+import { IconLayers, IconStar } from './icons';
 
 export type ViewMode = 'list' | 'grid' | 'card';
 export type SortDir = 'asc' | 'desc';
@@ -40,11 +40,13 @@ export function iconSrc(l: Link) {
 }
 
 export function HomeView({ initialLinks, initialGroups, defaultView, favorites, prefs, loggedIn }: Props) {
-  const { t } = useApp();
+  const { t, logo, title } = useApp();
   const [links, setLinks] = useState(initialLinks);
   const groups = initialGroups;
   const [q, setQ] = useState('');
   const [group, setGroup] = useState(-1);
+  // 小屏下左侧分组栏改为可收缩 / 伸出，默认收起以留出内容宽度
+  const [sideOpen, setSideOpen] = useState(false);
   const [view, setView] = useState<ViewMode>('grid');
   const [favs, setFavs] = useState<Set<number>>(() => new Set(favorites));
   const [sortDir, setSortDir] = useState<SortDir>(prefs?.sort_dir === 'desc' ? 'desc' : 'asc');
@@ -287,68 +289,102 @@ export function HomeView({ initialLinks, initialGroups, defaultView, favorites, 
       </div>
     );
 
+  /* 全局工具栏（折叠 / 排序 / 浏览模式）：与首个分组标题同行展示，靠右对齐 */
+  const toolbar = (
+    <div className="home-toolbar">
+      <div className="segmented">
+        {/* 折叠 / 展开合并为一个文字切换按钮 */}
+        <button onClick={toggleCollapseAll}>
+          {isAllCollapsed() ? t('expandAll') : t('collapseAll')}
+        </button>
+        <button
+          onClick={toggleSortDir}
+          title={sortDir === 'asc' ? t('sortAsc') : t('sortDesc')}
+          className={sortDir === 'desc' ? 'active' : ''}
+        >
+          {sortDir === 'asc' ? 'A↑' : 'A↓'}
+        </button>
+      </div>
+      <div className="segmented">
+        {(['list', 'grid', 'card'] as ViewMode[]).map((v) => (
+          <button
+            key={v}
+            className={view === v ? 'active' : ''}
+            onClick={() => setViewPersist(v)}
+            title={v === 'list' ? t('listView') : v === 'grid' ? t('gridView') : t('cardView')}
+          >
+            {v === 'list' ? '☰' : v === 'grid' ? '▦' : '⬒'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  // 收藏分组排在最前时，工具栏归收藏标题行
+  const showFav = group === -1 && favLinks.length > 0;
+
   return (
     <>
       <Header right={searchBox} />
       <main className="container home-layout">
-        {/* 左侧竖向分组导航 */}
-        <aside className="home-side">
-          <div className="home-side-title">{t('groups')}</div>
+        {/* 左侧竖向分组导航（窄屏下为从左滑出的抽屉） */}
+        {sideOpen && <div className="side-mask" onClick={() => setSideOpen(false)} />}
+        <aside className={`home-side ${sideOpen ? 'open' : ''}`}>
+          {/* 抽屉顶部品牌行：只在窄屏抽屉下显示，填补顶部留白 */}
+          <a href="/" className="drawer-brand" hidden={!sideOpen} onClick={() => setSideOpen(false)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logo} alt="" className="drawer-brand-mark" />
+            <span>{title}</span>
+          </a>
           <button
-            className={`side-tab ${group === -1 ? 'active' : ''}`}
-            onClick={() => setGroup(-1)}
+            className="side-toggle"
+            aria-expanded={sideOpen}
+            title={t('groups')}
+            aria-label={t('groups')}
+            onClick={() => setSideOpen((v) => !v)}
           >
-            <span className="side-dot side-dot-all" />
-            <span className="side-name">{t('allGroups')}</span>
+            <span className="nav-ico">
+              <IconLayers />
+            </span>
           </button>
-          {groups.map((g) => (
+          <div className="home-side-body">
+            <div className="home-side-title">{t('groups')}</div>
             <button
-              key={g.id}
-              className={`side-tab ${group === g.id ? 'active' : ''}`}
-              onClick={() => setGroup(g.id)}
+              className={`side-tab ${group === -1 ? 'active' : ''}`}
+              onClick={() => {
+                setGroup(-1);
+                setSideOpen(false);
+              }}
             >
-              <span className="side-dot" style={{ background: g.color || 'var(--muted)' }} />
-              <span className="side-name">{g.name}</span>
+              <span className="side-dot side-dot-all" />
+              <span className="side-name">{t('allGroups')}</span>
             </button>
-          ))}
+            {groups.map((g) => (
+              <button
+                key={g.id}
+                className={`side-tab ${group === g.id ? 'active' : ''}`}
+                onClick={() => {
+                  setGroup(g.id);
+                  setSideOpen(false);
+                }}
+              >
+                <span className="side-dot" style={{ background: g.color || 'var(--muted)' }} />
+                <span className="side-name">{g.name}</span>
+              </button>
+            ))}
+          </div>
         </aside>
 
         {/* 右侧内容区 */}
         <div className="home-main">
-          <div className="home-toolbar">
-            <div className="segmented">
-              {/* 折叠 / 展开合并为一个文字切换按钮 */}
-              <button onClick={toggleCollapseAll}>
-                {isAllCollapsed() ? t('expandAll') : t('collapseAll')}
-              </button>
-              <button
-                onClick={toggleSortDir}
-                title={sortDir === 'asc' ? t('sortAsc') : t('sortDesc')}
-                className={sortDir === 'desc' ? 'active' : ''}
-              >
-                {sortDir === 'asc' ? 'A↑' : 'A↓'}
-              </button>
-            </div>
-            <div className="segmented">
-              {(['list', 'grid', 'card'] as ViewMode[]).map((v) => (
-                <button
-                  key={v}
-                  className={view === v ? 'active' : ''}
-                  onClick={() => setViewPersist(v)}
-                  title={v === 'list' ? t('listView') : v === 'grid' ? t('gridView') : t('cardView')}
-                >
-                  {v === 'list' ? '☰' : v === 'grid' ? '▦' : '⬒'}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {links.length === 0 ? (
-            <div className="empty">{t('emptyHome')}</div>
+            <>
+              {toolbar}
+              <div className="empty">{t('emptyHome')}</div>
+            </>
           ) : (
             <>
               {/* 顶部独立收藏组（仅在全部视图且有收藏时显示） */}
-              {group === -1 && favLinks.length > 0 && (
+              {showFav && (
                 <section className="section fav-section">
                   <div className="section-head">
                     <span className="fav-star">
@@ -357,6 +393,7 @@ export function HomeView({ initialLinks, initialGroups, defaultView, favorites, 
                     <span className="section-bar" />
                     <span className="section-title">{t('favorite')}</span>
                     <span className="section-count">{favLinks.length}</span>
+                    {toolbar}
                   </div>
                   <div key={view} className="view-wrap">
                     {renderItems(favLinks)}
@@ -364,7 +401,7 @@ export function HomeView({ initialLinks, initialGroups, defaultView, favorites, 
                 </section>
               )}
 
-              {grouped.map(({ g, items }) => {
+              {grouped.map(({ g, items }, gi) => {
                 const sid = g?.id ?? 0;
                 const isCollapsed = collapsed.has(sid);
                 return (
@@ -376,6 +413,7 @@ export function HomeView({ initialLinks, initialGroups, defaultView, favorites, 
                       <span className="section-bar" />
                       <span className="section-title">{g?.name ?? t('ungrouped')}</span>
                       <span className="section-count">{items.length}</span>
+                      {!showFav && gi === 0 && toolbar}
                     </div>
                     {!isCollapsed && (
                       <div key={view} className="view-wrap">
