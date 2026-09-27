@@ -4,3 +4,6 @@ data/
 vibe_images/
 *.tsbuildinfo
 next-env.d.ts
+
+# 1Panel 本地部署模板：仅保留在磁盘，不纳入版本控制
+/1panel/
