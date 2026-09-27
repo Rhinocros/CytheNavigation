@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 export type Locale = 'zh' | 'en';
 
 export const dict = {
@@ -84,7 +88,6 @@ export const dict = {
     siteTitle: '站点标题',
     visit: '访问',
     owner: '所有者',
-    systemTitle: '系统',
     loading: '加载中…',
     opFailed: '操作失败',
     saved: '已保存',
@@ -114,13 +117,18 @@ export const dict = {
     brand: 'Cythe | 循息导航',
     footerTagline: '本地优先 · 自托管服务导航',
     footerRights: '保留所有权利。',
-    footerTech: '基于 Next.js 构建 · 自托管部署 · 数据本地存储',
+    siteLogo: '站点 Logo',
+    logoUpload: '上传 Logo',
+    logoRestore: '恢复默认',
+    logoHint: '支持 PNG / JPG / WebP / GIF / SVG / ICO，最大 2MB，全站生效',
+    copyrightNote: '本文件已添加版权注释，提示不可删除',
     scan: '内网扫描',
     scanDesc: '自动发现局域网内开放端口的设备与服务，并添加到单独的分组。',
     scanConsentTitle: '扫描前请确认知情并同意：',
     scanConsent1: '扫描由本服务器向所在私网网段（默认 /24）的常用端口发起 TCP 连接探测，并对响应的服务做 HTTP 指纹识别。',
     scanConsent2: '扫描结果仅保存在本站本地数据库中，不会上传到任何第三方。',
     scanConsent3: '请勿在不受信任或受限的网络环境使用；频繁扫描可能触发网络设备的安全防护策略。',
+    scanConsent4: '扫描在页面内同步进行，期间请勿切换页面或刷新浏览器，否则扫描会中断、结果丢失。',
     scanAgree: '我已阅读以上说明，同意发起内网扫描',
     scanCidr: '扫描网段 (CIDR)',
     scanStart: '开始扫描',
@@ -143,6 +151,7 @@ export const dict = {
     scanConfirmAdd: '确定添加到分组',
     scanSelectedHint: '将把勾选的 {s} 项添加到「内网扫描 · LAN Scan」分组',
     scanNoSelection: '请至少勾选一项',
+    scanKeepPage: '扫描进行中，请勿切换页面或刷新浏览器，否则扫描请求会中断且结果丢失',
     scanAddedDone: '已添加 {c} 条到分组',
   },
   en: {
@@ -228,7 +237,6 @@ export const dict = {
     siteTitle: 'Site title',
     visit: 'Visit',
     owner: 'Owner',
-    systemTitle: 'System',
     loading: 'Loading…',
     opFailed: 'Operation failed',
     saved: 'Saved',
@@ -258,13 +266,18 @@ export const dict = {
     brand: 'Cythe Navigation',
     footerTagline: 'Local-first · Self-hosted service navigation',
     footerRights: 'All rights reserved.',
-    footerTech: 'Built with Next.js · Self-hosted · Data stored locally',
+    siteLogo: 'Site logo',
+    logoUpload: 'Upload logo',
+    logoRestore: 'Restore default',
+    logoHint: 'PNG / JPG / WebP / GIF / SVG / ICO, up to 2MB, applies site-wide',
+    copyrightNote: 'A copyright notice is added to each source file and must not be removed',
     scan: 'LAN Scan',
     scanDesc: 'Automatically discover devices and services with open ports on your LAN, and add them to a dedicated group.',
     scanConsentTitle: 'Please read and confirm before scanning:',
     scanConsent1: 'The scan sends TCP connection probes from this server to common ports on its own private subnet (/24 by default), plus HTTP fingerprinting of responding services.',
     scanConsent2: 'Results are stored only in the local database of this site and are never uploaded to any third party.',
     scanConsent3: 'Do not use on untrusted or restricted networks; frequent scanning may trigger security policies of network devices.',
+    scanConsent4: 'The scan runs inside this page; do not switch pages or refresh the browser while it runs, or the scan will be interrupted and its results lost.',
     scanAgree: 'I have read the notice above and agree to the LAN scan',
     scanCidr: 'Subnet (CIDR)',
     scanStart: 'Start scan',
@@ -287,6 +300,7 @@ export const dict = {
     scanConfirmAdd: 'Add selected to group',
     scanSelectedHint: 'Will add {s} selected items to the “LAN Scan” group',
     scanNoSelection: 'Select at least one item',
+    scanKeepPage: 'Scan in progress — do not switch pages or refresh the browser, or the scan request will be interrupted and its results lost',
     scanAddedDone: 'Added {c} items to the group',
   },
 } as const;

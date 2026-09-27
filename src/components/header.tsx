@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 'use client';
 
 import Link from 'next/link';
@@ -6,7 +10,7 @@ import { useState } from 'react';
 import { useApp } from './providers';
 
 export function Header({ right }: { right?: React.ReactNode }) {
-  const { t, locale, setLocale, mode, setMode, user, setUser } = useApp();
+  const { t, locale, setLocale, mode, setMode, user, setUser, logo } = useApp();
   const router = useRouter();
   const [mSearch, setMS] = useState(false);
 
@@ -21,7 +25,7 @@ export function Header({ right }: { right?: React.ReactNode }) {
     <header className={'header' + (mSearch && right ? ' msearch' : '')}>
       <div className="container header-inner">
         <Link href="/" className="logo">
-          <img src="/logo.png" alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
+          <img src={logo} alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
           <span>{t('brand')}</span>
         </Link>
         {right && <div className="header-slot">{right}</div>}

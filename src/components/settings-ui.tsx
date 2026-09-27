@@ -1,6 +1,11 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useApp } from './providers';
 import { Header } from './header';
@@ -59,6 +64,16 @@ export function SettingsUI({
   const [confirmGroup, setConfirmGroup] = useState<Group | null>(null);
   const [confirmUser, setConfirmUser] = useState<UserRow | null>(null);
   const [resetPwdUser, setResetPwdUser] = useState<UserRow | null>(null);
+  // 内网扫描进行中：锁定左侧导航，避免切页导致扫描中断
+  const [scanning, setScanning] = useState(false);
+
+  // 服务端数据变化（router.refresh 后 props 更新）时同步进本地状态，避免列表陈旧
+  useEffect(() => {
+    setLinks(initLinks);
+  }, [initLinks]);
+  useEffect(() => {
+    setGroups(initGroups);
+  }, [initGroups]);
 
   function notify(msg: string) {
     setToast(msg);
@@ -123,8 +138,9 @@ export function SettingsUI({
     );
     if (newLinks.length) {
       setLinks((ls) => {
-        const ids = new Set(newLinks.map((l) => l.id));
-        return [...ls, ...newLinks.filter((l) => !ids.has(l.id))];
+        // 以现有列表的 id 去重，只追加尚未存在的条目
+        const known = new Set(ls.map((l) => l.id));
+        return [...ls, ...newLinks.filter((l) => !known.has(l.id))];
       });
     }
     refresh();
@@ -141,6 +157,8 @@ export function SettingsUI({
               <button
                 key={x.id}
                 className={tab === x.id ? 'active' : ''}
+                disabled={scanning && x.id !== 'scan'}
+                title={scanning && x.id !== 'scan' ? t('scanKeepPage') : undefined}
                 onClick={() => setTab(x.id)}
               >
                 <span className="nav-ico">{x.icon}</span> {x.label}
@@ -161,7 +179,7 @@ export function SettingsUI({
             <GroupsTab groups={groups} setGroups={setGroups} links={links} notify={notify} refresh={refresh} onConfirmDelete={(g) => setConfirmGroup(g)} />
           )}
           {tab === 'scan' && isAdmin && (
-            <ScanTab locale={locale} notify={notify} onAdded={applyScanResult} />
+            <ScanTab locale={locale} notify={notify} onAdded={applyScanResult} onScanning={setScanning} />
           )}
           {tab === 'appearance' && (
             <AppearanceTab
@@ -169,6 +187,8 @@ export function SettingsUI({
               settings={settings}
               setSettings={setSettings}
               notify={notify}
+              logo={settings.logo_image ?? ''}
+              onLogoChange={(v) => setSettings((s) => ({ ...s, logo_image: v }))}
             />
           )}
           {tab === 'system' && isAdmin && (
@@ -266,8 +286,8 @@ function SitesTab({
             <th style={{ width: 36 }} />
             <th>{t('name')}</th>
             <th>{t('url')}</th>
-            <th>{t('group')}</th>
-            <th>{t('scope')}</th>
+            <th style={{ width: 150 }}>{t('group')}</th>
+            <th style={{ width: 78 }}>{t('scope')}</th>
             <th style={{ width: 120 }}>{t('actions')}</th>
           </tr>
         </thead>
@@ -287,7 +307,7 @@ function SitesTab({
                 {hostOf(l.url)}
               </td>
               <td>
-                <span className="chip">{gname(l.group_id)}</span>
+                <span className="chip chip-wrap">{gname(l.group_id)}</span>
               </td>
               <td>
                 <span className={`chip ${l.scope === 'external' ? 'chip-accent' : ''}`}>
@@ -516,10 +536,12 @@ function ScanTab({
   locale,
   notify,
   onAdded,
+  onScanning,
 }: {
   locale: Locale;
   notify: (m: string) => void;
   onAdded: (group: Group, links: Link[]) => void;
+  onScanning: (b: boolean) => void;
 }) {
   const { t } = useApp();
   const [cidr, setCidr] = useState('');
@@ -571,18 +593,38 @@ function ScanTab({
       if (r.ok) {
         const j = await r.json();
         const list: ScanPreview[] = Array.isArray(j.items) ? j.items : [];
-        setItems(list);
-        setSelected(defaultSelected(list));
         saveScanCache({ ts: Date.now(), cidr, items: list });
+        // 结果与按钮状态同步落屏，避免「扫描完成」提示先出现、结果晚几秒才渲染
+        flushSync(() => {
+          setItems(list);
+          setSelected(defaultSelected(list));
+          setBusy(false);
+        });
         notify(t('scanDone'));
-      } else {
-        notify(t('scanFailedHint'));
+        return;
       }
+      flushSync(() => setBusy(false));
+      notify(t('scanFailedHint'));
     } catch {
+      flushSync(() => setBusy(false));
       notify(t('scanFailedHint'));
     }
-    setBusy(false);
   }
+
+  // 扫描进行中：上报状态以锁定左侧导航，并拦截刷新/关闭标签页避免请求中断
+  useEffect(() => {
+    onScanning(busy);
+    if (!busy) return;
+    const guard = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => {
+      window.removeEventListener('beforeunload', guard);
+      onScanning(false);
+    };
+  }, [busy, onScanning]);
 
   const selectableKeys = items.filter((i) => !i.exists && !i.added).map((i) => i.key);
   const allChecked = selectableKeys.length > 0 && selectableKeys.every((k) => selected.has(k));
@@ -626,19 +668,24 @@ function ScanTab({
         const nextItems = items.map((i) =>
           chosenKeys.has(i.key) ? { ...i, added: true } : i
         );
-        setItems(nextItems);
-        setSelected(new Set());
+        // 先合并进本地状态（站点管理立即可见），再一次性落屏
+        if (j.group && Array.isArray(j.links)) onAdded(j.group as Group, j.links as Link[]);
+        flushSync(() => {
+          setItems(nextItems);
+          setSelected(new Set());
+          setConfirming(false);
+        });
         // 更新缓存（保留剩余预览 5 分钟）
         saveScanCache({ ts: Date.now(), cidr, items: nextItems });
-        if (j.group && Array.isArray(j.links)) onAdded(j.group as Group, j.links as Link[]);
         notify(t('scanAddedDone').replace('{c}', String(j.created ?? 0)));
-      } else {
-        notify(t('scanFailedHint'));
+        return;
       }
+      flushSync(() => setConfirming(false));
+      notify(t('scanFailedHint'));
     } catch {
+      flushSync(() => setConfirming(false));
       notify(t('scanFailedHint'));
     }
-    setConfirming(false);
   }
 
   function discard() {
@@ -666,6 +713,7 @@ function ScanTab({
           <li>{t('scanConsent1')}</li>
           <li>{t('scanConsent2')}</li>
           <li>{t('scanConsent3')}</li>
+          <li>{t('scanConsent4')}</li>
         </ol>
       </div>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, cursor: 'pointer' }}>
@@ -693,6 +741,11 @@ function ScanTab({
       {!detected && (
         <div className="setting-desc" style={{ marginTop: 8 }}>
           {t('scanNoNet')}
+        </div>
+      )}
+      {busy && (
+        <div className="scan-warn" role="status">
+          ⚠ {t('scanKeepPage')}
         </div>
       )}
 
@@ -726,7 +779,7 @@ function ScanTab({
                 <th>{t('name')}</th>
                 <th>{t('url')}</th>
                 <th>{t('note')}</th>
-                <th style={{ width: 64 }}>{t('scanStatus')}</th>
+                <th style={{ width: 88 }}>{t('scanStatus')}</th>
               </tr>
             </thead>
             <tbody>
@@ -788,11 +841,15 @@ function AppearanceTab({
   settings,
   setSettings,
   notify,
+  logo,
+  onLogoChange,
 }: {
   isAdmin: boolean;
   settings: Record<string, string>;
   setSettings: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   notify: (m: string) => void;
+  logo: string;
+  onLogoChange: (v: string) => void;
 }) {
   const { t, mode, setMode, accent, setAccent, locale, setLocale } = useApp();
   const accents: { id: Accent; label: string; css: string }[] = [
@@ -853,15 +910,7 @@ function AppearanceTab({
             ))}
           </div>
         </div>
-      </div>
-      <BgImageCard hasBg={!!(settings.bg_image ?? '')} bgKey={settings.bg_image ?? ''} notify={notify} />
-      {isAdmin && (
-        <div className="panel-card">
-          <div className="panel-title">{t('systemTitle')}</div>
-          <div className="setting-row">
-            <div className="setting-label">{t('siteTitle')}</div>
-            <TitleInput value={settings.site_title ?? ''} onSave={(v) => saveSettings({ site_title: v })} />
-          </div>
+        {isAdmin && (
           <div className="setting-row">
             <div className="setting-label">{t('defaultView')}</div>
             <div className="segmented">
@@ -876,7 +925,11 @@ function AppearanceTab({
               ))}
             </div>
           </div>
-        </div>
+        )}
+      </div>
+      <BgImageCard hasBg={!!(settings.bg_image ?? '')} bgKey={settings.bg_image ?? ''} notify={notify} />
+      {isAdmin && (
+        <LogoCard logo={logo} onLogoChange={onLogoChange} notify={notify} />
       )}
     </>
   );
@@ -959,6 +1012,85 @@ function TitleInput({ value, onSave }: { value: string; onSave: (v: string) => v
   );
 }
 
+/* ---------------- Site logo (admin only) ---------------- */
+
+function LogoCard({
+  logo,
+  onLogoChange,
+  notify,
+}: {
+  logo: string;
+  onLogoChange: (v: string) => void;
+  notify: (m: string) => void;
+}) {
+  const { t, setLogo } = useApp();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const hasLogo = !!logo;
+  const src = hasLogo ? `/api/asset/logo?v=${encodeURIComponent(logo)}` : '/logo.png';
+
+  async function upload(f: File) {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append('file', f);
+    const r = await fetch('/api/asset/logo', { method: 'POST', body: fd });
+    setBusy(false);
+    if (fileRef.current) fileRef.current.value = '';
+    if (!r.ok) {
+      notify(t('opFailed'));
+      return;
+    }
+    const j = (await r.json().catch(() => null)) as { name?: string; logo?: string } | null;
+    if (j?.logo) setLogo(j.logo);
+    onLogoChange(j?.name ?? '');
+    notify(t('saved'));
+  }
+
+  async function restore() {
+    const r = await fetch('/api/asset/logo', { method: 'DELETE' });
+    if (!r.ok) {
+      notify(t('opFailed'));
+      return;
+    }
+    setLogo('/logo.png');
+    onLogoChange('');
+    notify(t('saved'));
+  }
+
+  return (
+    <div className="panel-card">
+      <div className="panel-title">{t('siteLogo')}</div>
+      <div className="setting-row">
+        <div>
+          <div className="setting-desc">{t('logoHint')}</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+            <button className="btn btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <IconUpload width={14} height={14} /> {t('logoUpload')}
+            </button>
+            {hasLogo && (
+              <button className="btn btn-sm" onClick={restore}>
+                ↺ {t('logoRestore')}
+              </button>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon"
+            style={{ display: 'none' }}
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+          />
+        </div>
+        <img
+          src={src}
+          alt="logo preview"
+          style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'contain', border: '1px solid var(--border)', background: 'var(--panel-2)' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- System ---------------- */
 
 function SystemTab({
@@ -980,6 +1112,17 @@ function SystemTab({
     });
     if (r.ok) {
       setSettings((s) => ({ ...s, [key]: val }));
+      notify(t('saved'));
+    } else notify(t('opFailed'));
+  }
+  async function save(patch: Record<string, string>) {
+    const r = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (r.ok) {
+      setSettings((s) => ({ ...s, ...patch }));
       notify(t('saved'));
     } else notify(t('opFailed'));
   }
@@ -1005,6 +1148,13 @@ function SystemTab({
           className={`switch ${settings.user_can_add === '1' ? 'on' : ''}`}
           onClick={() => toggle('user_can_add')}
         />
+      </div>
+      <div className="setting-row">
+        <div>
+          <div className="setting-label">{t('siteTitle')}</div>
+          <div className="setting-desc">{t('copyrightNote')}</div>
+        </div>
+        <TitleInput value={settings.site_title ?? ''} onSave={(v) => save({ site_title: v })} />
       </div>
     </div>
   );

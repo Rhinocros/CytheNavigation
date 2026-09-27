@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -16,6 +20,9 @@ type Ctx = {
   setAccent: (a: Accent) => void;
   user: { id: number; username: string; role: string } | null;
   setUser: (u: Ctx['user']) => void;
+  /** 站点 Logo 地址（管理员可在系统设置中替换） */
+  logo: string;
+  setLogo: (src: string) => void;
 };
 
 const AppCtx = createContext<Ctx>(null!);
@@ -30,13 +37,21 @@ export function Providers({
   initial,
   children,
 }: {
-  initial: { locale: Locale; mode: Mode; accent: Accent; user: Ctx['user']; prefs?: Record<string, string> | null };
+  initial: {
+    locale: Locale;
+    mode: Mode;
+    accent: Accent;
+    user: Ctx['user'];
+    prefs?: Record<string, string> | null;
+    logo?: string;
+  };
   children: React.ReactNode
 }) {
   const [locale, setLocaleS] = useState<Locale>(initial.locale);
   const [mode, setModeS] = useState<Mode>(initial.mode);
   const [accent, setAccentS] = useState<Accent>(initial.accent as Accent);
   const [user, setUser] = useState(initial.user);
+  const [logo, setLogo] = useState(initial.logo ?? '/logo.png');
 
   // 登录时把账户偏好同步到库（fire-and-forget），下次同一账户登录自动恢复
   const savePref = useCallback((key: string, value: string) => {
@@ -122,8 +137,10 @@ export function Providers({
       setAccent,
       user,
       setUser,
+      logo,
+      setLogo,
     }),
-    [locale, mode, accent, user, setLocale, setMode, setAccent]
+    [locale, mode, accent, user, logo, setLocale, setMode, setAccent]
   );
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

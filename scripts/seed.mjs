@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 // 注入 mock 数据：10 个分组 + 100 条站点
 // 用法：node scripts/seed.mjs [--force]
 import Database from 'better-sqlite3';

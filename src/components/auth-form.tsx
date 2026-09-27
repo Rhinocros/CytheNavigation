@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 'use client';
 
 import { useState } from 'react';
@@ -16,7 +20,7 @@ const errMap: Record<string, TKey> = {
 };
 
 export function AuthForm({ mode, bootstrap = false }: { mode: 'login' | 'register'; bootstrap?: boolean }) {
-  const { t, setUser } = useApp();
+  const { t, setUser, logo } = useApp();
   const router = useRouter();
   const [username, setU] = useState('');
   const [password, setP] = useState('');
@@ -63,7 +67,7 @@ export function AuthForm({ mode, bootstrap = false }: { mode: 'login' | 'registe
           <div className="auth-brand">
             <div>
               <div className="logo" style={{ marginBottom: 18 }}>
-                <img src="/logo.png" alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
+                <img src={logo} alt="Cythe" className="logo-mark" style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover' }} />
                 <span>{t('brand')}</span>
               </div>
               <h1>{mode === 'login' ? t('welcomeBack') : t('createAccount')}</h1>

@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
@@ -12,14 +16,17 @@ export async function generateMetadata(): Promise<Metadata> {
   const store = await cookies();
   const isEn = store.get('cythe_locale')?.value === 'en';
   let title = isEn ? 'Cythe Navigation' : 'Cythe | 循息导航';
+  let logo = '';
   try {
     if (!isEn) title = getSetting('site_title', title) || title;
+    logo = getSetting('logo_image');
   } catch {
     /* db not ready during static phase */
   }
   return {
     title,
     description: isEn ? 'Local-first self-hosted service navigation' : '本地优先的自托管服务导航页',
+    icons: logo ? { icon: `/api/asset/logo?v=${encodeURIComponent(logo)}` } : undefined,
   };
 }
 
@@ -51,6 +58,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     }
   }
   const bg = getSetting('bg_image');
+  const logoImage = getSetting('logo_image');
+  const logoSrc = logoImage ? `/api/asset/logo?v=${encodeURIComponent(logoImage)}` : '/logo.png';
   return (
     <html
       lang={locale === 'zh' ? 'zh-CN' : 'en'}
@@ -60,7 +69,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body>
         {bg ? <div className="bg-photo" style={{ backgroundImage: `url(/api/asset/bg?v=${encodeURIComponent(bg)})` }} /> : null}
-        <Providers initial={{ locale, mode, accent, user, prefs }}>
+        <Providers initial={{ locale, mode, accent, user, prefs, logo: logoSrc }}>
           {children}
           <SiteFooter />
         </Providers>

@@ -6,31 +6,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, getSetting, setSetting } from '@/lib/db';
-import { requireUser, fail } from '@/lib/api';
+import { requireAdmin, fail } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const BG_DIR = path.join(DATA_DIR, 'bg');
+const LOGO_DIR = path.join(DATA_DIR, 'logo');
 const EXT_MIME: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
 };
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024;
 
-function bgFile(): string | null {
-  const name = getSetting('bg_image');
+function logoFile(): string | null {
+  const name = getSetting('logo_image');
   if (!name) return null;
-  const file = path.join(BG_DIR, path.basename(name));
+  const file = path.join(LOGO_DIR, path.basename(name));
   return fs.existsSync(file) ? file : null;
 }
 
+/** Serve the custom logo; fall back to the bundled public/logo.png when none is set. */
 export async function GET() {
-  const file = bgFile();
-  if (!file) return fail('not_found', 404);
+  const file = logoFile() ?? path.join(process.cwd(), 'public', 'logo.png');
+  if (!fs.existsSync(file)) return fail('not_found', 404);
   const buf = fs.readFileSync(file);
   return new NextResponse(new Uint8Array(buf), {
     headers: {
@@ -40,38 +43,38 @@ export async function GET() {
   });
 }
 
-/** Upload a new background image (multipart form-data, field "file"). */
+/** Upload a new site logo (multipart form-data, field "file"). Admin only. */
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
-  if (user instanceof NextResponse) return user;
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
   if (!(file instanceof File)) return fail('missing_file');
   if (file.size > MAX_BYTES) return fail('too_large', 413);
   const ext = path.extname(file.name || '').toLowerCase();
   if (!EXT_MIME[ext]) return fail('unsupported_type');
-  fs.mkdirSync(BG_DIR, { recursive: true });
-  // remove previous background files
+  fs.mkdirSync(LOGO_DIR, { recursive: true });
+  // remove previous logo files
   try {
-    for (const f of fs.readdirSync(BG_DIR)) fs.rmSync(path.join(BG_DIR, f), { force: true });
+    for (const f of fs.readdirSync(LOGO_DIR)) fs.rmSync(path.join(LOGO_DIR, f), { force: true });
   } catch {
     /* dir may not exist yet */
   }
-  const name = `bg-${Date.now()}${ext}`;
-  fs.writeFileSync(path.join(BG_DIR, name), Buffer.from(await file.arrayBuffer()));
-  setSetting('bg_image', name);
-  return NextResponse.json({ ok: true, bg: `/api/asset/bg?v=${Date.now()}` });
+  const name = `logo-${Date.now()}${ext}`;
+  fs.writeFileSync(path.join(LOGO_DIR, name), Buffer.from(await file.arrayBuffer()));
+  setSetting('logo_image', name);
+  return NextResponse.json({ ok: true, name, logo: `/api/asset/logo?v=${Date.now()}` });
 }
 
-/** Remove the background image. */
+/** Remove the custom logo and restore the built-in one. Admin only. */
 export async function DELETE() {
-  const user = await requireUser();
-  if (user instanceof NextResponse) return user;
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   try {
-    fs.rmSync(BG_DIR, { recursive: true, force: true });
+    fs.rmSync(LOGO_DIR, { recursive: true, force: true });
   } catch {
     /* ignore */
   }
-  setSetting('bg_image', '');
+  setSetting('logo_image', '');
   return NextResponse.json({ ok: true });
 }

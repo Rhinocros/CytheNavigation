@@ -1,3 +1,7 @@
+/* Cythe | 循息导航 | Cythe Navigation
+ * 版权所有 © 2026 Cythe。保留所有权利。
+ * 本文件版权注释不可删除。
+ */
 :root {
   --radius: 8px;
   --radius-sm: 6px;
@@ -123,10 +127,12 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 }
 .icon-btn:hover { background: var(--panel); border-color: var(--border); color: var(--text); }
 .chip {
-  display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
-  border-radius: 4px; font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px;
+  border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap;
   background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
 }
+/* 允许换行的 chip（如较长的分组名）：背景高度随行高自适应，不裁切文字 */
+.chip-wrap { white-space: normal; line-height: 1.45; }
 .chip-accent { background: color-mix(in srgb, var(--a1) 14%, transparent); color: var(--a1); border-color: color-mix(in srgb, var(--a1) 30%, transparent); }
 
 /* ---------- group tabs ---------- */
@@ -140,7 +146,7 @@ input, select, textarea { font-family: inherit; color: var(--text); }
 .grouptab.active { color: var(--a1); background: color-mix(in srgb, var(--a1) 12%, transparent); border-color: color-mix(in srgb, var(--a1) 28%, transparent); }
 
 /* ---------- home two-column layout (left group sidebar) ---------- */
-.home-layout { display: grid; grid-template-columns: 184px 1fr; gap: 28px; padding-top: 8px; align-items: start; }
+.home-layout { display: grid; grid-template-columns: 184px 1fr; gap: 28px; padding-top: 8px; padding-bottom: 56px; align-items: start; }
 .home-side {
   position: sticky; top: calc(var(--header-h) + 16px);
   display: flex; flex-direction: column; gap: 2px;
@@ -301,11 +307,19 @@ textarea.input { height: auto; padding: 8px 12px; resize: vertical; }
   font-size: 13px; font-weight: 500; text-align: left; transition: all 0.15s;
 }
 .settings-nav button:hover { background: var(--panel); color: var(--text); }
+.settings-nav button:disabled { opacity: .4; cursor: not-allowed; background: transparent; color: var(--muted); }
 .settings-nav button.active { background: color-mix(in srgb, var(--a1) 12%, transparent); color: var(--a1); font-weight: 600; }
 .nav-ico { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; }
 .nav-ico svg { width: 16px; height: 16px; display: block; }
 .sort-btns { display: flex; align-items: center; gap: 4px; }
 .settings-panel { display: flex; flex-direction: column; gap: 16px; }
+/* 扫描进行中的防中断提醒 */
+.scan-warn {
+  margin-top: 10px; padding: 9px 12px; border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border));
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: var(--text); font-size: 12px; font-weight: 600;
+}
 .panel-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
 .panel-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
