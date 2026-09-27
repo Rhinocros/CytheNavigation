@@ -211,7 +211,7 @@ docker compose up -d --build
 npm install
 npm run dev        # http://localhost:3000
 # 本地缩略图功能需: npx playwright-core install chromium-headless-shell
-# 注入示例数据（100 个站点 / 10 个分组，便于预览）: node scripts/seed.mjs
+# 注入示例数据（100 个站点 / 10 个分组，便于预览）: node scripts/seed.mjs（加 --en 生成英文分组名与备注）
 ```
 
 ## 技术架构

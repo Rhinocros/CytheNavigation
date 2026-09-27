@@ -23,7 +23,7 @@ if ((gCount > 0 || lCount > 0) && !force) {
   process.exit(0);
 }
 
-const GROUPS = [
+const GROUPS_ZH = [
   ['开发工具', '#5b7cfa'],
   ['运维监控', '#38bdf8'],
   ['数据库', '#f5b451'],
@@ -35,6 +35,22 @@ const GROUPS = [
   ['下载资源', '#facc15'],
   ['生活服务', '#94a3b8'],
 ];
+
+const GROUPS_EN = [
+  ['Dev Tools', '#5b7cfa'],
+  ['Ops & Monitoring', '#38bdf8'],
+  ['Databases', '#f5b451'],
+  ['AI Services', '#a78bfa'],
+  ['Media & Entertainment', '#f472b6'],
+  ['Office & Collaboration', '#34d399'],
+  ['Learning Resources', '#22d3ee'],
+  ['Social & Forums', '#fb7185'],
+  ['Downloads', '#facc15'],
+  ['Life Services', '#94a3b8'],
+];
+
+const LANG_EN = process.argv.includes('--en');
+const GROUPS = LANG_EN ? GROUPS_EN : GROUPS_ZH;
 
 const insertGroup = db.prepare('INSERT INTO groups(name,color,sort,visibility) VALUES(?,?,?,?)');
 const insertLink = db.prepare(
@@ -48,10 +64,15 @@ db.transaction(() => {
     groupIds.push(Number(info.lastInsertRowid));
   });
 
-  const NOTES = [
+  const NOTES_ZH = [
     '日常使用频率高', '团队协作入口', '需要内网访问', '备用实例',
     '带 Web 控制台', '仅管理员可访问', '自动备份已开启', '新上线，欢迎体验', '',
   ];
+  const NOTES_EN = [
+    'Used daily', 'Team collaboration entry', 'Intranet access required', 'Standby instance',
+    'With web console', 'Admins only', 'Auto backup enabled', 'Newly launched, try me!', '',
+  ];
+  const NOTES = LANG_EN ? NOTES_EN : NOTES_ZH;
   let sort = 0;
   for (let n = 1; n <= 100; n++) {
     const gi = (n - 1) % 10;
@@ -63,7 +84,7 @@ db.transaction(() => {
       : `svc-${String(n).padStart(3, '0')}.internal`;
     insertLink.run(
       gid,
-      `${gname} · 站点 ${String(n).padStart(3, '0')}`,
+      `${gname} · ${LANG_EN ? 'Service' : '站点'} ${String(n).padStart(3, '0')}`,
       `https://${host}`,
       NOTES[n % NOTES.length],
       '',

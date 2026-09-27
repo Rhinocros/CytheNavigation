@@ -26,61 +26,61 @@ One Docker container + one SQLite file is the entire runtime state. No third-par
 
 ## Preview
 
-> Screenshots captured locally (`npm run dev`) with demo data injected via `node scripts/seed.mjs`.
+> Screenshots captured locally (`npm run dev`) with English demo data injected via `node scripts/seed.mjs --en`, UI switched to English.
 
 Home · grid cards (dark / indigo) — vertical group sidebar on the left, favorites pinned as a top group, view & collapse controls at top right:
 
-![Home grid dark](docs/screenshots/02-home-grid-dark.png)
+![Home grid dark](docs/screenshots/en/02-home-grid-dark.png)
 
 Big-card mode (thumbnail preview area):
 
-![Home big cards](docs/screenshots/03-home-bigcard-dark.png)
+![Home big cards](docs/screenshots/en/03-home-bigcard-dark.png)
 
 Compact list mode:
 
-![Home list](docs/screenshots/04-home-list-dark.png)
+![Home list](docs/screenshots/en/04-home-list-dark.png)
 
 Light theme:
 
-![Home light](docs/screenshots/05-home-grid-light.png)
+![Home light](docs/screenshots/en/05-home-grid-light.png)
 
 Live search (typing filters to matching groups instantly):
 
-![Search](docs/screenshots/06-home-search.png)
+![Search](docs/screenshots/en/06-home-search.png)
 
 Settings navigation (Sites / Groups / LAN Scan / Appearance / System / Users / Backup, unified SVG icons):
 
-![Settings](docs/screenshots/07-settings.png)
+![Settings](docs/screenshots/en/07-settings.png)
 
 Group management (color / visibility / reorder):
 
-![Groups](docs/screenshots/08-settings-groups.png)
+![Groups](docs/screenshots/en/08-settings-groups.png)
 
 Appearance (mode, accent palette, language, background upload, site logo, default view):
 
-![Appearance](docs/screenshots/09-settings-appearance.png)
+![Appearance](docs/screenshots/en/09-settings-appearance.png)
 
 Data backup (JSON export / import):
 
-![Backup](docs/screenshots/10-settings-data.png)
+![Backup](docs/screenshots/en/10-settings-data.png)
 
 Login / register (first registration becomes admin, with a live hint):
 
-![Login](docs/screenshots/01-login.png)
+![Login](docs/screenshots/en/01-login.png)
 
 ### Mobile (re-laid out below 760px)
 
 Small-screen home: header actions collapse into an icon menu, search folds away, the group sidebar becomes an edge drawer:
 
-![Mobile home](docs/screenshots/11-mobile-home.png)
+![Mobile home](docs/screenshots/en/11-mobile-home.png)
 
 The group drawer slides out from the left edge with a brand row and a translucent mask:
 
-![Mobile drawer](docs/screenshots/12-mobile-drawer.png)
+![Mobile drawer](docs/screenshots/en/12-mobile-drawer.png)
 
 Header icon menu (language / theme / settings / sign out):
 
-![Mobile menu](docs/screenshots/13-mobile-menu.png)
+![Mobile menu](docs/screenshots/en/13-mobile-menu.png)
 
 ## In Depth
 
@@ -188,7 +188,7 @@ State persists under `./data` (`cythe.db`, `icons/`, `thumbs/`).
 npm install
 npm run dev        # http://localhost:3000
 # Thumbnails locally: npx playwright-core install chromium-headless-shell
-# Inject demo data (100 links / 10 groups): node scripts/seed.mjs
+# Inject demo data (100 links / 10 groups): node scripts/seed.mjs  (add --en for English names/notes)
 ```
 
 ## Architecture
