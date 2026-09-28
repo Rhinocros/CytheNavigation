@@ -56,6 +56,10 @@
 
 ![分组管理](docs/screenshots/08-settings-groups.png)
 
+内网自动扫描（先告知后动手：编号清单说明扫描行为与数据去向，未勾选同意则「开始扫描」锁定）：
+
+![内网扫描](docs/screenshots/14-settings-scan.png)
+
 外观主题（深浅模式、配色、语言、背景图上传、站点 Logo、默认浏览模式）：
 
 ![外观主题](docs/screenshots/09-settings-appearance.png)

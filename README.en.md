@@ -56,6 +56,10 @@ Group management (color / visibility / reorder):
 
 ![Groups](docs/screenshots/en/08-settings-groups.png)
 
+LAN auto-scan (disclose-first design: a numbered notice explains what the scan does and where results go; the scan button stays locked until consent is ticked):
+
+![LAN Scan](docs/screenshots/en/14-settings-scan.png)
+
 Appearance (mode, accent palette, language, background upload, site logo, default view):
 
 ![Appearance](docs/screenshots/en/09-settings-appearance.png)
